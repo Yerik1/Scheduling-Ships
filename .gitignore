@@ -1,0 +1,56 @@
+# =========================
+# ESP-IDF build outputs
+# =========================
+build/
+cmake-build-*/
+managed_components/
+
+# Archivos temporales de configuración ESP-IDF
+sdkconfig.old
+dependencies.lock
+
+# =========================
+# CLion / JetBrains
+# =========================
+.idea/
+*.iml
+
+# =========================
+# Archivos locales de entorno
+# =========================
+espidf_env.bat
+*.local
+.env
+
+# =========================
+# Toolchains o frameworks copiados por accidente
+# =========================
+esp-idf/
+.espressif/
+
+# =========================
+# CMake temporales
+# =========================
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+compile_commands.json
+
+# =========================
+# Archivos generados / binarios
+# =========================
+*.elf
+*.bin
+*.map
+*.hex
+*.o
+*.obj
+*.a
+*.exe
+
+# =========================
+# Sistema operativo
+# =========================
+.DS_Store
+Thumbs.db
+desktop.ini
