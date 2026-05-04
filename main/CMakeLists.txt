@@ -4,6 +4,8 @@ idf_component_register(
         SRCS
         "main.c"
 
+        "config/config.c"
+
         "ships/ship.c"
         "ships/ship_factory.c"
 
@@ -16,12 +18,16 @@ idf_component_register(
 
         "canal/canal.c"
 
+        "flow_policies/flow_policy.c"
+
         INCLUDE_DIRS
         "."
+        "config"
         "common"
         "ships"
         "tasks"
         "queues"
         "schedulers"
         "canal"
+        "flow_policies"
 )
