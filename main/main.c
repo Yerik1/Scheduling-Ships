@@ -378,7 +378,7 @@ static int select_scheduler_index(SchedulerType schedulerType, ReadyQueue *queue
         case SCHED_EDF:
             return scheduler_edf(queue);
 
-        case SCHED_RR:
+        case SCHD_RR:
             /*
              * RR se maneja aparte porque necesita rrIndex.
              */
@@ -422,7 +422,7 @@ static const char *scheduler_type_to_string(SchedulerType type)
     switch (type) {
         case SCHED_FCFS:
             return "SCHED_FCFS";
-        case SCHED_RR:
+        case SCHD_RR:
             return "SCHED_RR";
         case SCHED_PRIORITY:
             return "SCHED_PRIORITY";

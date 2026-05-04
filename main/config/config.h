@@ -9,7 +9,7 @@
 
 typedef enum {
     SCHED_FCFS,
-    SCHED_RR,
+    SCHD_RR,
     SCHED_PRIORITY,
     SCHED_SJF,
     SCHED_STRN,
