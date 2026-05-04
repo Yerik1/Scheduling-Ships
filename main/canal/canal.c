@@ -14,6 +14,16 @@ static void give_position_semaphore(Canal *canal, int index);
 
 static bool canal_add_task_at(Canal *canal, ShipTask *task, int index);
 
+static int get_step_direction(ShipTask *task);
+static int get_last_valid_index(Canal *canal, int nextIndex);
+static bool canal_will_exit(Canal *canal, int nextIndex);
+
+static bool take_path_semaphores(Canal *canal, int fromIndex, int toIndex);
+static void give_path_semaphores(Canal *canal, int fromIndex, int toIndex);
+
+static bool canal_path_is_free_locked(Canal *canal, ShipTask *task, int oldIndex, int endIndex);
+static bool canal_is_blocked(Canal *canal);
+
 void canal_init(Canal *canal, int length, Direction initial_direction) {
     if (canal == NULL) {
         return;
@@ -172,42 +182,30 @@ bool canal_can_move_task(Canal *canal, ShipTask *task) {
         return false;
     }
 
-    bool result = false;
-
-    if (!take_state_semaphore(canal)) {
+    if (canal_is_blocked(canal)) {
         return false;
     }
 
-    if (canal->isBlocked) {
-        give_state_semaphore(canal);
-        return false;
-    }
+    int oldIndex = task->ship.position;
 
-    int oldIndex = find_task_position(canal, task);
-
-    if (oldIndex == -1) {
-        give_state_semaphore(canal);
+    if (oldIndex < 0 || oldIndex >= canal->length) {
         return false;
     }
 
     int nextIndex = get_next_index(task);
+    int endIndex = get_last_valid_index(canal, nextIndex);
 
-    if (nextIndex < 0 || nextIndex >= canal->length) {
-        give_state_semaphore(canal);
-        return true;
-    }
-
-    if (!take_position_semaphore(canal, nextIndex)) {
-        give_state_semaphore(canal);
+    if (endIndex < 0 || endIndex >= canal->length) {
         return false;
     }
 
-    if (is_pos_free(&canal->ships_inside, nextIndex)) {
-        result = true;
+    if (!take_path_semaphores(canal, oldIndex, endIndex)) {
+        return false;
     }
 
-    give_position_semaphore(canal, nextIndex);
-    give_state_semaphore(canal);
+    bool result = canal_path_is_free_locked(canal, task, oldIndex, endIndex);
+
+    give_path_semaphores(canal, oldIndex, endIndex);
 
     return result;
 }
@@ -217,35 +215,40 @@ bool canal_move_task(Canal *canal, ShipTask *task) {
         return false;
     }
 
-    bool result = false;
-
-    if (!take_state_semaphore(canal)) {
+    if (canal_is_blocked(canal)) {
         return false;
     }
 
-    if (canal->isBlocked) {
-        give_state_semaphore(canal);
-        return false;
-    }
+    int oldIndex = task->ship.position;
 
-    int oldIndex = find_task_position(canal, task);
-
-    if (oldIndex == -1) {
-        give_state_semaphore(canal);
+    if (oldIndex < 0 || oldIndex >= canal->length) {
         return false;
     }
 
     int nextIndex = get_next_index(task);
+    int endIndex = get_last_valid_index(canal, nextIndex);
+    bool exits = canal_will_exit(canal, nextIndex);
 
-    if (nextIndex < 0 || nextIndex >= canal->length) {
-        if (!take_position_semaphore(canal, oldIndex)) {
-            give_state_semaphore(canal);
-            return false;
-        }
+    if (endIndex < 0 || endIndex >= canal->length) {
+        return false;
+    }
 
+    if (!take_path_semaphores(canal, oldIndex, endIndex)) {
+        return false;
+    }
+
+    bool result = false;
+
+    if (!canal_path_is_free_locked(canal, task, oldIndex, endIndex)) {
+        give_path_semaphores(canal, oldIndex, endIndex);
+        return false;
+    }
+
+    if (exits) {
         ShipTask *removedTask = canal_list_remove(&canal->ships_inside, oldIndex);
 
         if (removedTask != NULL) {
+            decRemainingTime(&removedTask->ship);
             finish(&removedTask->ship);
 
             printf(
@@ -256,28 +259,7 @@ bool canal_move_task(Canal *canal, ShipTask *task) {
 
             result = true;
         }
-
-        give_position_semaphore(canal, oldIndex);
-        give_state_semaphore(canal);
-
-        return result;
-    }
-
-    int firstLock = oldIndex < nextIndex ? oldIndex : nextIndex;
-    int secondLock = oldIndex < nextIndex ? nextIndex : oldIndex;
-
-    if (!take_position_semaphore(canal, firstLock)) {
-        give_state_semaphore(canal);
-        return false;
-    }
-
-    if (!take_position_semaphore(canal, secondLock)) {
-        give_position_semaphore(canal, firstLock);
-        give_state_semaphore(canal);
-        return false;
-    }
-
-    if (is_pos_free(&canal->ships_inside, nextIndex)) {
+    } else {
         result = move_task(&canal->ships_inside, oldIndex, nextIndex);
 
         if (result) {
@@ -293,9 +275,7 @@ bool canal_move_task(Canal *canal, ShipTask *task) {
         }
     }
 
-    give_position_semaphore(canal, secondLock);
-    give_position_semaphore(canal, firstLock);
-    give_state_semaphore(canal);
+    give_path_semaphores(canal, oldIndex, endIndex);
 
     return result;
 }
@@ -413,11 +393,17 @@ static int get_next_index(ShipTask *task) {
         return -1;
     }
 
-    if (task->ship.origin == LEFT) {
-        return task->ship.position + 1;
+    int speed = task->ship.speed;
+
+    if (speed <= 0) {
+        speed = 1;
     }
 
-    return task->ship.position - 1;
+    if (task->ship.origin == LEFT) {
+        return task->ship.position + speed;
+    }
+
+    return task->ship.position - speed;
 }
 
 static int find_task_position(Canal *canal, ShipTask *task) {
@@ -480,4 +466,150 @@ static void give_position_semaphore(Canal *canal, int index) {
     }
 
     xSemaphoreGive(canal->positionSemaphores[index]);
+}
+
+static int get_step_direction(ShipTask *task) {
+    if (task == NULL) {
+        return 0;
+    }
+
+    if (task->ship.origin == LEFT) {
+        return 1;
+    }
+
+    return -1;
+}
+
+static bool canal_will_exit(Canal *canal, int nextIndex) {
+    if (canal == NULL) {
+        return false;
+    }
+
+    return nextIndex < 0 || nextIndex >= canal->length;
+}
+
+static int get_last_valid_index(Canal *canal, int nextIndex) {
+    if (canal == NULL) {
+        return -1;
+    }
+
+    if (nextIndex < 0) {
+        return 0;
+    }
+
+    if (nextIndex >= canal->length) {
+        return canal->length - 1;
+    }
+
+    return nextIndex;
+}
+
+static bool take_path_semaphores(Canal *canal, int fromIndex, int toIndex) {
+    if (canal == NULL) {
+        return false;
+    }
+
+    if (fromIndex < 0 || fromIndex >= canal->length) {
+        return false;
+    }
+
+    if (toIndex < 0 || toIndex >= canal->length) {
+        return false;
+    }
+
+    int start = fromIndex < toIndex ? fromIndex : toIndex;
+    int end = fromIndex < toIndex ? toIndex : fromIndex;
+
+    for (int i = start; i <= end; i++) {
+        if (!take_position_semaphore(canal, i)) {
+            for (int j = start; j < i; j++) {
+                give_position_semaphore(canal, j);
+            }
+
+            return false;
+        }
+    }
+
+    return true;
+}
+
+static void give_path_semaphores(Canal *canal, int fromIndex, int toIndex) {
+    if (canal == NULL) {
+        return;
+    }
+
+    if (fromIndex < 0 || fromIndex >= canal->length) {
+        return;
+    }
+
+    if (toIndex < 0 || toIndex >= canal->length) {
+        return;
+    }
+
+    int start = fromIndex < toIndex ? fromIndex : toIndex;
+    int end = fromIndex < toIndex ? toIndex : fromIndex;
+
+    for (int i = end; i >= start; i--) {
+        give_position_semaphore(canal, i);
+    }
+}
+
+static bool canal_path_is_free_locked(Canal *canal, ShipTask *task, int oldIndex, int endIndex) {
+    if (canal == NULL || task == NULL) {
+        return false;
+    }
+
+    if (oldIndex < 0 || oldIndex >= canal->length) {
+        return false;
+    }
+
+    if (endIndex < 0 || endIndex >= canal->length) {
+        return false;
+    }
+
+    if (canal->ships_inside.tasks[oldIndex] != task) {
+        return false;
+    }
+
+    int step = get_step_direction(task);
+
+    if (step == 0) {
+        return false;
+    }
+
+    int current = oldIndex + step;
+
+    while (true) {
+        if (current < 0 || current >= canal->length) {
+            break;
+        }
+
+        if (canal->ships_inside.tasks[current] != NULL) {
+            return false;
+        }
+
+        if (current == endIndex) {
+            break;
+        }
+
+        current += step;
+    }
+
+    return true;
+}
+
+static bool canal_is_blocked(Canal *canal) {
+    if (canal == NULL) {
+        return true;
+    }
+
+    if (!take_state_semaphore(canal)) {
+        return true;
+    }
+
+    bool blocked = canal->isBlocked;
+
+    give_state_semaphore(canal);
+
+    return blocked;
 }
