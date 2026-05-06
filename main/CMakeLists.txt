@@ -38,6 +38,7 @@ idf_component_register(
         "hw"
 
         REQUIRES
-        led_strip
-        driver
+            led_strip
+            driver
+            esp_driver_gpio
 )
