@@ -7,22 +7,23 @@
 #include <stdio.h>
 
 #include "driver/gpio.h"
+#include "esp_attr.h"
 
 #ifndef PROXIMITY_SENSOR_GPIO
-#define PROXIMITY_SENSOR_GPIO 9
+#define PROXIMITY_SENSOR_GPIO 2
 #endif
 
-/*
- * Si el sensor entrega 1 cuando detecta proximidad, dejar en 1.
- * Si entrega 0 cuando detecta proximidad, cambiar a 0.
- */
 #ifndef PROXIMITY_SENSOR_ACTIVE_HIGH
 #define PROXIMITY_SENSOR_ACTIVE_HIGH 1
 #endif
 
 static volatile bool sensorTriggered = false;
 
-static void IRAM_ATTR proximity_sensor_isr_handler(void *args);
+static void IRAM_ATTR proximity_sensor_isr_handler(void *args)
+{
+    (void) args;
+    sensorTriggered = true;
+}
 
 bool proximity_sensor_init(void)
 {
@@ -72,10 +73,4 @@ bool proximity_sensor_was_triggered(void)
 void proximity_sensor_clear_trigger(void)
 {
     sensorTriggered = false;
-}
-
-static void IRAM_ATTR proximity_sensor_isr_handler(void *args)
-{
-    (void) args;
-    sensorTriggered = true;
 }
