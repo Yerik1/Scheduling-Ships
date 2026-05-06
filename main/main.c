@@ -11,6 +11,7 @@
 #include "Scheduler.h"
 #include "canal.h"
 #include "flow_policy.h"
+#include "hw_controller.h"
 
 #define DEMO_TOTAL_LEFT_SHIPS 4
 #define DEMO_TOTAL_RIGHT_SHIPS 4
@@ -89,7 +90,21 @@ void app_main(void)
         config.signInterval
     );
 
+    bool hardwareOk = hardware_init();
+
+    if (!hardwareOk) {
+        printf("ADVERTENCIA: Hardware no inicializado correctamente. La simulacion continua.\n");
+        hardware_set_enabled(false);
+    }
+
     create_demo_ships();
+
+    hardware_render_state(
+        &leftQueue,
+        &rightQueue,
+        &demoCanal,
+        &flowPolicy
+    );
 
     BaseType_t result = xTaskCreate(
         simulation_task,
@@ -237,6 +252,7 @@ static void simulation_task(void *params)
 
         if (selectedQueue == NULL || queue_is_empty(selectedQueue)) {
             printf("No se libero ningun barco este tick.\n");
+            hardware_render_state(&leftQueue, &rightQueue, &demoCanal, &flowPolicy);
             vTaskDelay(pdMS_TO_TICKS(config.tickMs));
             continue;
         }
@@ -255,6 +271,7 @@ static void simulation_task(void *params)
 
         if (selectedIndex < 0) {
             printf("Scheduler no selecciono ningun barco.\n");
+            hardware_render_state(&leftQueue, &rightQueue, &demoCanal, &flowPolicy);
             vTaskDelay(pdMS_TO_TICKS(config.tickMs));
             continue;
         }
@@ -263,6 +280,7 @@ static void simulation_task(void *params)
 
         if (selectedTask == NULL) {
             printf("La task seleccionada es NULL.\n");
+            hardware_render_state(&leftQueue, &rightQueue, &demoCanal, &flowPolicy);
             vTaskDelay(pdMS_TO_TICKS(config.tickMs));
             continue;
         }
@@ -297,6 +315,13 @@ static void simulation_task(void *params)
             printf("\nNo quedan barcos en colas ni en canal.\n");
             break;
         }
+
+        hardware_render_state(
+            &leftQueue,
+            &rightQueue,
+            &demoCanal,
+            &flowPolicy
+        );
 
         vTaskDelay(pdMS_TO_TICKS(config.tickMs));
     }

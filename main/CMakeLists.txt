@@ -20,6 +20,11 @@ idf_component_register(
 
         "flow_policies/flow_policy.c"
 
+        "hw/hw_controller.c"
+        "hw/led_strips.c"
+        "hw/direction_leds.c"
+        "hw/proximity_sensor.c"
+
         INCLUDE_DIRS
         "."
         "config"
@@ -30,4 +35,9 @@ idf_component_register(
         "schedulers"
         "canal"
         "flow_policies"
+        "hw"
+
+        REQUIRES
+        led_strip
+        driver
 )
