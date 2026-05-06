@@ -29,4 +29,8 @@ void hardware_clear_interrupt(void);
 
 void hardware_set_enabled(bool enabled);
 
+bool hardware_init_canal_only(void);
+
+void hardware_render_canal_only(Canal *canal);
+
 #endif //HW_CONTROLLER_H

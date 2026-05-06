@@ -102,3 +102,23 @@ void hardware_clear_interrupt(void) {
 void hardware_set_enabled(bool enabled) {
     hardwareEnabled = enabled;
 }
+
+bool hardware_init_canal_only(void) {
+    bool ok = led_strips_init_canal_only();
+
+    hardwareInitialized = ok;
+
+    if (ok) {
+        printf("Solo tira LED del canal inicializada correctamente\n");
+    }
+
+    return ok;
+}
+
+void hardware_render_canal_only(Canal *canal) {
+    if (!hardwareEnabled || !hardwareInitialized || canal == NULL) {
+        return;
+    }
+
+    led_strips_render_canal(canal);
+}

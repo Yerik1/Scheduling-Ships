@@ -90,7 +90,7 @@ void app_main(void)
         config.signInterval
     );
 
-    bool hardwareOk = hardware_init();
+    bool hardwareOk = hardware_init_canal_only();
 
     if (!hardwareOk) {
         printf("ADVERTENCIA: Hardware no inicializado correctamente. La simulacion continua.\n");
@@ -99,12 +99,7 @@ void app_main(void)
 
     create_demo_ships();
 
-    hardware_render_state(
-        &leftQueue,
-        &rightQueue,
-        &demoCanal,
-        &flowPolicy
-    );
+    hardware_render_canal_only(&demoCanal);
 
     BaseType_t result = xTaskCreate(
         simulation_task,
@@ -252,7 +247,7 @@ static void simulation_task(void *params)
 
         if (selectedQueue == NULL || queue_is_empty(selectedQueue)) {
             printf("No se libero ningun barco este tick.\n");
-            hardware_render_state(&leftQueue, &rightQueue, &demoCanal, &flowPolicy);
+            hardware_render_canal_only(&demoCanal);
             vTaskDelay(pdMS_TO_TICKS(config.tickMs));
             continue;
         }
@@ -271,7 +266,7 @@ static void simulation_task(void *params)
 
         if (selectedIndex < 0) {
             printf("Scheduler no selecciono ningun barco.\n");
-            hardware_render_state(&leftQueue, &rightQueue, &demoCanal, &flowPolicy);
+            hardware_render_canal_only(&demoCanal);
             vTaskDelay(pdMS_TO_TICKS(config.tickMs));
             continue;
         }
@@ -280,7 +275,7 @@ static void simulation_task(void *params)
 
         if (selectedTask == NULL) {
             printf("La task seleccionada es NULL.\n");
-            hardware_render_state(&leftQueue, &rightQueue, &demoCanal, &flowPolicy);
+            hardware_render_canal_only(&demoCanal);
             vTaskDelay(pdMS_TO_TICKS(config.tickMs));
             continue;
         }

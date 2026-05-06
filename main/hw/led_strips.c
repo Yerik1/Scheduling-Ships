@@ -216,3 +216,17 @@ static void set_empty_color(led_strip_handle_t strip, int ledIndex)
 
     led_strip_set_pixel(strip, ledIndex, 0, 0, 0);
 }
+
+bool led_strips_init_canal_only(void)
+{
+    if (!create_led_strip(CANAL_LED_GPIO, CANAL_LED_COUNT, &canalStrip)) {
+        printf("ERROR: No se pudo inicializar tira LED del canal\n");
+        return false;
+    }
+
+    if (canalStrip != NULL) {
+        led_strip_clear(canalStrip);
+    }
+
+    return true;
+}
