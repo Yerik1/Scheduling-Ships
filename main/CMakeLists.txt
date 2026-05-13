@@ -20,6 +20,15 @@ idf_component_register(
 
         "flow_policies/flow_policy.c"
 
+        "hw/hw_controller.c"
+        "hw/led_strips.c"
+        "hw/direction_leds.c"
+        "hw/proximity_sensor.c"
+
+        "ui/ui.c"
+
+        "serial_comm/serial_comm.c"
+
         INCLUDE_DIRS
         "."
         "config"
@@ -30,4 +39,13 @@ idf_component_register(
         "schedulers"
         "canal"
         "flow_policies"
+        "hw"
+        "ui"
+        "serial_comm"
+
+        REQUIRES
+            led_strip
+            driver
+            esp_driver_gpio
+            esp_driver_usb_serial_jtag
 )

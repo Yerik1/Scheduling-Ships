@@ -6,11 +6,17 @@
 #define READY_QUEUE_H
 #include "../tasks/ship_task.h"
 
-#define MAX_SHIPS 4
+#ifndef READY_QUEUE_MAX_CAPACITY
+#define READY_QUEUE_MAX_CAPACITY 20
+#endif
+
+#ifndef READY_QUEUE_VISIBLE_SLOTS
+#define READY_QUEUE_VISIBLE_SLOTS 4
+#endif
 // Ready Queue struct
 typedef struct
 {
-    ShipTask *tasks[MAX_SHIPS];
+    ShipTask *tasks[READY_QUEUE_MAX_CAPACITY];
     int count;
 } ReadyQueue;
 

@@ -16,7 +16,7 @@ void queue_init(ReadyQueue *q){
 
     q->count = 0;
 
-    for (int i = 0; i < MAX_SHIPS; i++){
+    for (int i = 0; i < READY_QUEUE_MAX_CAPACITY; i++){
         q->tasks[i] = NULL;
     }
 }
@@ -31,11 +31,12 @@ int queue_add(ReadyQueue *q, ShipTask *task){
     if (q == NULL || task == NULL){
         return 0;
     }
-    if (q->count >= MAX_SHIPS){
+    if (q->count >= READY_QUEUE_MAX_CAPACITY){
         return 0;
     }
 
-    q->tasks[q->count++] = task;
+    q->tasks[q->count] = task;
+    q->count++;
     return 1;
 }
 

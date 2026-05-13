@@ -54,3 +54,8 @@ compile_commands.json
 .DS_Store
 Thumbs.db
 desktop.ini
+
+*.vscode
+
+*__pycache__/
+*.venv/

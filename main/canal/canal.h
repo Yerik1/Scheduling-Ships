@@ -33,5 +33,8 @@ bool canal_move_task(Canal *canal, ShipTask *task);
 ShipTask *canal_remove_task(Canal *canal, ShipTask *task);
 void canal_block(Canal *canal);
 void canal_unblock(Canal *canal);
+bool canal_move_one_step(Canal *canal, ShipTask *task);
+void canal_notify_ships(Canal *canal);
+void canal_notify_ships_ordered(Canal *canal);
 
 #endif //CANAL_H
