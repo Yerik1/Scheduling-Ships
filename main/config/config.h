@@ -5,6 +5,10 @@
 #ifndef CONFIG_H
 #define CONFIG_H
 
+#ifndef PHYSICAL_CANAL_CELLS
+#define PHYSICAL_CANAL_CELLS 6
+#endif
+
 #include "../flow_policies/flow_policy.h"
 
 typedef enum {

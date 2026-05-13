@@ -613,3 +613,176 @@ static bool canal_is_blocked(Canal *canal) {
 
     return blocked;
 }
+
+bool canal_move_one_step(Canal *canal, ShipTask *task)
+{
+    if (canal == NULL || task == NULL) {
+        return false;
+    }
+
+    bool result = false;
+
+    if (!take_state_semaphore(canal)) {
+        return false;
+    }
+
+    if (canal->isBlocked) {
+        give_state_semaphore(canal);
+        return false;
+    }
+
+    int oldIndex = find_task_position(canal, task);
+
+    if (oldIndex == -1) {
+        give_state_semaphore(canal);
+        return false;
+    }
+
+    int nextIndex;
+
+    if (task->ship.origin == LEFT) {
+        nextIndex = oldIndex + 1;
+    } else {
+        nextIndex = oldIndex - 1;
+    }
+
+    /*
+     * Si el siguiente índice sale del canal,
+     * el barco termina su cruce.
+     */
+    if (nextIndex < 0 || nextIndex >= canal->length) {
+        if (!take_position_semaphore(canal, oldIndex)) {
+            give_state_semaphore(canal);
+            return false;
+        }
+
+        ShipTask *removedTask = canal_list_remove(&canal->ships_inside, oldIndex);
+
+        if (removedTask != NULL) {
+            finish(&removedTask->ship);
+
+            printf(
+                "Barco %d salio del canal desde posicion %d\n",
+                removedTask->ship.id,
+                oldIndex
+            );
+
+            result = true;
+        }
+
+        give_position_semaphore(canal, oldIndex);
+        give_state_semaphore(canal);
+
+        return result;
+    }
+
+    int firstLock = oldIndex < nextIndex ? oldIndex : nextIndex;
+    int secondLock = oldIndex < nextIndex ? nextIndex : oldIndex;
+
+    if (!take_position_semaphore(canal, firstLock)) {
+        give_state_semaphore(canal);
+        return false;
+    }
+
+    if (!take_position_semaphore(canal, secondLock)) {
+        give_position_semaphore(canal, firstLock);
+        give_state_semaphore(canal);
+        return false;
+    }
+
+    /*
+     * Solo se mueve si la siguiente casilla está libre.
+     * Si está ocupada, se queda justo antes.
+     */
+    if (is_pos_free(&canal->ships_inside, nextIndex)) {
+        result = move_task(&canal->ships_inside, oldIndex, nextIndex);
+
+        if (result) {
+            task->ship.position = nextIndex;
+            decRemainingTime(&task->ship);
+
+            printf(
+                "Barco %d avanzo de %d a %d\n",
+                task->ship.id,
+                oldIndex,
+                nextIndex
+            );
+        }
+    } else {
+        printf(
+            "Barco %d bloqueado en %d, siguiente posicion ocupada: %d\n",
+            task->ship.id,
+            oldIndex,
+            nextIndex
+        );
+    }
+
+    give_position_semaphore(canal, secondLock);
+    give_position_semaphore(canal, firstLock);
+    give_state_semaphore(canal);
+
+    return result;
+}
+
+void canal_notify_ships(Canal *canal)
+{
+    if (canal == NULL) {
+        return;
+    }
+
+    if (!take_state_semaphore(canal)) {
+        return;
+    }
+
+    for (int i = 0; i < canal->length; i++) {
+        ShipTask *task = canal->ships_inside.tasks[i];
+
+        if (task != NULL && task->handle != NULL) {
+            xTaskNotifyGive(task->handle);
+        }
+    }
+
+    give_state_semaphore(canal);
+}
+
+void canal_notify_ships_ordered(Canal *canal)
+{
+    if (canal == NULL) {
+        return;
+    }
+
+    /*
+     * Si el flujo va de izquierda a derecha, los barcos avanzan hacia índices mayores.
+     * Entonces se debe notificar primero el índice más alto.
+     */
+    if (canal->current_direction == LEFT) {
+        for (int i = canal->length - 1; i >= 0; i--) {
+            ShipTask *task = canal->ships_inside.tasks[i];
+
+            if (task != NULL && task->handle != NULL) {
+                xTaskNotifyGive(task->handle);
+
+                /*
+                 * Pequeño margen para que el barco de adelante libere espacio
+                 * antes de despertar al que viene detrás.
+                 */
+                vTaskDelay(pdMS_TO_TICKS(30));
+            }
+        }
+    }
+
+    /*
+     * Si el flujo va de derecha a izquierda, los barcos avanzan hacia índices menores.
+     * Entonces se debe notificar primero el índice más bajo.
+     */
+    else if (canal->current_direction == RIGHT) {
+        for (int i = 0; i < canal->length; i++) {
+            ShipTask *task = canal->ships_inside.tasks[i];
+
+            if (task != NULL && task->handle != NULL) {
+                xTaskNotifyGive(task->handle);
+                vTaskDelay(pdMS_TO_TICKS(30));
+            }
+        }
+    }
+}

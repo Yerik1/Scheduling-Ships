@@ -9,7 +9,7 @@ void config_load_defaults(AppConfig *config) {
     }
 
     config->canalLength = 10;
-    config->tickMs = 500;
+    config->tickMs = 1000;
 
     config->leftInitialShips = 4;
     config->rightInitialShips = 4;

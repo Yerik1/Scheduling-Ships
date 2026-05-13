@@ -1,5 +1,6 @@
 import tkinter as tk
 from tkinter import ttk, messagebox
+MAX_QUEUE_SIZE = 100
 
 class ConfigView:
     def __init__(self, parent, callback_iniciar):
@@ -23,7 +24,7 @@ class ConfigView:
         self.entry_largo.grid(row=0, column=1, pady=5)
         self.widgets.extend([frame_general.children['!label'], self.entry_largo])
 
-        tk.Label(frame_general, text="Tamaño Máximo de Cola(Máximo 4):", bg="lightblue", font=("Arial", 10, "bold")).grid(row=1, column=0, sticky=tk.W, pady=5)
+        tk.Label(frame_general, text=f"Tamaño Máximo de Cola (visible: 4, máximo interno: {MAX_QUEUE_SIZE}):", bg="lightblue", font=("Arial", 10, "bold")).grid(row=1, column=0, sticky=tk.W, pady=5)
         self.entry_queue_size = tk.Entry(frame_general, width=10)
         self.entry_queue_size.insert(0, "4")
         self.entry_queue_size.grid(row=1, column=1, pady=5)
@@ -175,8 +176,11 @@ class ConfigView:
         # Validaciones
         try:
             queue_size = int(self.entry_queue_size.get())
-            if queue_size <= 0 or queue_size > 4:
-                messagebox.showerror("Error de Validación", "El tamaño de la cola debe ser entre 1 y 4.")
+            if queue_size <= 0 or queue_size >  MAX_QUEUE_SIZE:
+                messagebox.showerror(
+                    "Error de Validación",
+                    f"El tamaño de la cola debe ser entre 1 y {MAX_QUEUE_SIZE}."
+                )
                 return
 
             left_total = (

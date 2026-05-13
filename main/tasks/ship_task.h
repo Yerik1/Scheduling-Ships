@@ -21,6 +21,8 @@ typedef struct ShipTask {
     TaskHandle_t handle;
     char taskName[16];
     int maxSteps;
+    float effectiveSpeed;
+    float moveCredit;
 } ShipTask;
 
 BaseType_t createShipTask(struct Ship ship);

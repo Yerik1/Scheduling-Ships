@@ -47,7 +47,6 @@ class CanalController:
 
         # Aplicar configuración
         self.modelo.largo = CANAL_LENGTH_FIXED
-        config["canalLength"] = CANAL_LENGTH_FIXED
         self.queue_size = config["queueSize"]
         self.flow_type = config["flowType"]
         self.generation_mode = config.get("generationMode", "Fijo")

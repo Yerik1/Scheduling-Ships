@@ -1,5 +1,6 @@
 import tkinter as tk
 from tkinter import ttk
+VISIBLE_QUEUE_SLOTS = 4
 
 class CanalView:
     def __init__(self, root, modelo_canal):
@@ -37,16 +38,38 @@ class CanalView:
         self.canvas.delete("barco_tag")
 
         # --- 1. DIBUJAR COLA IZQUIERDA ---
-        for i, b_id in enumerate(cola_izq):
+        for i, b_id in enumerate(cola_izq[:VISIBLE_QUEUE_SLOTS]):
             x_cola = 200 - (i * 50)
             tipo = self.get_tipo_from_id(b_id)
             self.dibujar_barco(x_cola, 230, tipo, b_id)
 
         # --- 2. DIBUJAR COLA DERECHA ---
-        for i, b_id in enumerate(cola_der):
+        for i, b_id in enumerate(cola_der[:VISIBLE_QUEUE_SLOTS]):
             x_cola = 800 + (i * 50)
             tipo = self.get_tipo_from_id(b_id)
             self.dibujar_barco(x_cola, 230, tipo, b_id)
+
+        if len(cola_izq) > VISIBLE_QUEUE_SLOTS:
+            restantes = len(cola_izq) - VISIBLE_QUEUE_SLOTS
+            self.canvas.create_text(
+                40,
+                270,
+                text=f"+{restantes}",
+                fill="black",
+                font=("Arial", 10, "bold"),
+                tags="barco_tag"
+            )
+
+        if len(cola_der) > VISIBLE_QUEUE_SLOTS:
+            restantes = len(cola_der) - VISIBLE_QUEUE_SLOTS
+            self.canvas.create_text(
+                960,
+                270,
+                text=f"+{restantes}",
+                fill="black",
+                font=("Arial", 10, "bold"),
+                tags="barco_tag"
+            )
 
         # --- 3. DIBUJAR BARCOS EN CANAL ---
         ancho_visual = 500
