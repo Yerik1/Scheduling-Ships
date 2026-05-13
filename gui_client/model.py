@@ -1,8 +1,8 @@
 class Barco:
     def __init__(self, id, tipo, sentido, velocidad):
         self.id = id
-        self.tipo = tipo  # Normal, Pesquero, Patrulla
-        self.sentido = sentido  # 'izq_der' o 'der_izq'
+        self.tipo = tipo
+        self.sentido = sentido
         self.posicion_x = 0
         self.velocidad = velocidad
 
@@ -11,7 +11,7 @@ class CanalModelo:
         self.largo = largo
         self.cola_izq = []
         self.cola_der = []
-        self.barco_canal = None
+        self.barcos_canal = []
         self.sentido_actual = "IZQUIERDA"
         self.agujas_activas = False
         self.flow_actual = "Equidad"
@@ -20,15 +20,8 @@ class CanalModelo:
         self.cola_izq = izq_ids
         self.cola_der = der_ids
 
-    def actualizar_canal(self, ship_id, posicion, tipo='N'):
-        if ship_id:
-            self.barco_canal = {
-                "id": ship_id,
-                "pos": posicion,
-                "tipo": tipo
-            }
-        else:
-            self.barco_canal = None
+    def actualizar_canal(self, barcos):
+        self.barcos_canal = barcos
 
     def agregar_barco_cola(self, lado, barco_id):
         if lado == 'L':

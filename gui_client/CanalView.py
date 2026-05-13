@@ -33,14 +33,14 @@ class CanalView:
         self.texto_letrero = self.canvas.create_text(500, 140, text="Sentido: IZQ", font=("Arial", 10, "bold"), fill="black")
         self.texto_agujas = self.canvas.create_text(500, 485, text="Agujas: IZQ=ARRIBA  DER=ARRIBA", font=("Arial", 10, "bold"), fill="black")
 
-    def actualizar_barcos(self, cola_izq, cola_der, barco_canal):
+    def actualizar_barcos(self, cola_izq, cola_der, barcos_canal):
         self.canvas.delete("barco_tag")
-        
+
         # --- 1. DIBUJAR COLA IZQUIERDA ---
         for i, b_id in enumerate(cola_izq):
             x_cola = 200 - (i * 50)
             tipo = self.get_tipo_from_id(b_id)
-            self.dibujar_barco(x_cola, 230, tipo, b_id) 
+            self.dibujar_barco(x_cola, 230, tipo, b_id)
 
         # --- 2. DIBUJAR COLA DERECHA ---
         for i, b_id in enumerate(cola_der):
@@ -48,11 +48,28 @@ class CanalView:
             tipo = self.get_tipo_from_id(b_id)
             self.dibujar_barco(x_cola, 230, tipo, b_id)
 
-        # --- 3. DIBUJAR BARCO EN CANAL ---
-        if barco_canal:
-            ancho_visual = 500 
-            x_pos = 250 + (barco_canal['pos'] * (ancho_visual / self.modelo.largo))
-            self.dibujar_barco(x_pos, 230, barco_canal['tipo'], barco_canal['id'])
+        # --- 3. DIBUJAR BARCOS EN CANAL ---
+        ancho_visual = 500
+
+        canal_steps = 6
+
+        for barco in barcos_canal:
+
+            pos = barco['pos']
+
+            if pos < 0:
+                pos = 0
+
+            if pos >= canal_steps:
+                pos = canal_steps - 1
+
+            x_pos = 250 + (pos * (ancho_visual / (canal_steps - 1)))
+            self.dibujar_barco(
+                x_pos,
+                230,
+                barco.get('tipo', 'N'),
+                barco.get('id', '?')
+            )
 
         self.actualizar_agujas(self.modelo.agujas_activas)
     

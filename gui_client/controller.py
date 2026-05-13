@@ -4,9 +4,13 @@ import platform
 import os
 import json
 import tkinter as tk
+import time
 from model import CanalModelo
 from ConfigView import ConfigView
 from CanalView import CanalView
+
+CANAL_LENGTH_FIXED = 6
+UI_REFRESH_MS = 50
 
 class CanalController:
     def __init__(self, root):
@@ -42,9 +46,11 @@ class CanalController:
             self.config_view.destroy()
 
         # Aplicar configuración
-        self.modelo.largo = config["canalLength"]
+        self.modelo.largo = CANAL_LENGTH_FIXED
+        config["canalLength"] = CANAL_LENGTH_FIXED
         self.queue_size = config["queueSize"]
         self.flow_type = config["flowType"]
+        self.generation_mode = config.get("generationMode", "Fijo")
 
         # Generar barcos iniciales
         izq_ids = []
@@ -66,125 +72,75 @@ class CanalController:
 
         # Intentar conexión Serial
         try:
-            puerto = 'COM3' if platform.system() == 'Windows' else '/dev/ttyUSB0'
-            self.ser = serial.Serial(puerto, 115200, timeout=0.1)
-            msg = f"CONF:{config['canalLength']}:{config['queueSize']}:{config['schedulerType']}:{config['flowType']}:{config['fairnessW']}:{config['signInterval']}:{config['rrQuantum']}\n"
-            self.ser.write(msg.encode())
-        except Exception:
-            self.simulacion = True
-            print("Iniciando en modo simulación.")
-            # Configurar simulación de test RR con Equidad W=1
-            self.estado_index = 0
-            self.estados_simulacion =  [
-                # Estado inicial
-                "STATE:left:L0N,L1N,L2N,L3N;right:R0N,R1N,R2N,R3N;canal:;sign:L;needle:0;flow:Equidad",
-                # Barco R0N entra y se mueve
-                "STATE:left:L0N,L1N,L2N,L3N;right:R1N,R2N,R3N;canal:R0N@10#N;sign:L;needle:0;flow:Equidad",
-                "STATE:left:L0N,L1N,L2N,L3N;right:R1N,R2N,R3N;canal:R0N@9#N;sign:L;needle:0;flow:Equidad",
-                "STATE:left:L0N,L1N,L2N,L3N;right:R1N,R2N,R3N;canal:R0N@8#N;sign:L;needle:0;flow:Equidad",
-                "STATE:left:L0N,L1N,L2N,L3N;right:R1N,R2N,R3N;canal:R0N@7#N;sign:L;needle:0;flow:Equidad",
-                "STATE:left:L0N,L1N,L2N,L3N;right:R1N,R2N,R3N;canal:R0N@6#N;sign:L;needle:0;flow:Equidad",
-                "STATE:left:L0N,L1N,L2N,L3N;right:R1N,R2N,R3N;canal:R0N@5#N;sign:L;needle:0;flow:Equidad",
-                "STATE:left:L0N,L1N,L2N,L3N;right:R1N,R2N,R3N;canal:R0N@4#N;sign:L;needle:0;flow:Equidad",
-                "STATE:left:L0N,L1N,L2N,L3N;right:R1N,R2N,R3N;canal:R0N@3#N;sign:L;needle:0;flow:Equidad",
-                "STATE:left:L0N,L1N,L2N,L3N;right:R1N,R2N,R3N;canal:R0N@2#N;sign:L;needle:0;flow:Equidad",
-                "STATE:left:L0N,L1N,L2N,L3N;right:R1N,R2N,R3N;canal:R0N@1#N;sign:L;needle:0;flow:Equidad",
-                "STATE:left:L0N,L1N,L2N,L3N;right:R1N,R2N,R3N;canal:R0N@0#N;sign:L;needle:0;flow:Equidad",
-                "STATE:left:L0N,L1N,L2N,L3N;right:R1N,R2N,R3N;canal:;sign:L;needle:0;flow:Equidad",
-                # Barco R1N
-                "STATE:left:L0N,L1N,L2N,L3N;right:R2N,R3N;canal:R1N@10#N;sign:L;needle:0;flow:Equidad",
-                "STATE:left:L0N,L1N,L2N,L3N;right:R2N,R3N;canal:R1N@9#N;sign:L;needle:0;flow:Equidad",
-                "STATE:left:L0N,L1N,L2N,L3N;right:R2N,R3N;canal:R1N@8#N;sign:L;needle:0;flow:Equidad",
-                "STATE:left:L0N,L1N,L2N,L3N;right:R2N,R3N;canal:R1N@7#N;sign:L;needle:0;flow:Equidad",
-                "STATE:left:L0N,L1N,L2N,L3N;right:R2N,R3N;canal:R1N@6#N;sign:L;needle:0;flow:Equidad",
-                "STATE:left:L0N,L1N,L2N,L3N;right:R2N,R3N;canal:R1N@5#N;sign:L;needle:0;flow:Equidad",
-                "STATE:left:L0N,L1N,L2N,L3N;right:R2N,R3N;canal:R1N@4#N;sign:L;needle:0;flow:Equidad",
-                "STATE:left:L0N,L1N,L2N,L3N;right:R2N,R3N;canal:R1N@3#N;sign:L;needle:0;flow:Equidad",
-                "STATE:left:L0N,L1N,L2N,L3N;right:R2N,R3N;canal:R1N@2#N;sign:L;needle:0;flow:Equidad",
-                "STATE:left:L0N,L1N,L2N,L3N;right:R2N,R3N;canal:R1N@1#N;sign:L;needle:0;flow:Equidad",
-                "STATE:left:L0N,L1N,L2N,L3N;right:R2N,R3N;canal:R1N@0#N;sign:L;needle:0;flow:Equidad",
-                "STATE:left:L0N,L1N,L2N,L3N;right:R2N,R3N;canal:;sign:L;needle:0;flow:Equidad",
-                # Barco R2N
-                "STATE:left:L0N,L1N,L2N,L3N;right:R3N;canal:R2N@10#N;sign:L;needle:0;flow:Equidad",
-                "STATE:left:L0N,L1N,L2N,L3N;right:R3N;canal:R2N@9#N;sign:L;needle:0;flow:Equidad",
-                "STATE:left:L0N,L1N,L2N,L3N;right:R3N;canal:R2N@8#N;sign:L;needle:0;flow:Equidad",
-                "STATE:left:L0N,L1N,L2N,L3N;right:R3N;canal:R2N@7#N;sign:L;needle:0;flow:Equidad",
-                "STATE:left:L0N,L1N,L2N,L3N;right:R3N;canal:R2N@6#N;sign:L;needle:0;flow:Equidad",
-                "STATE:left:L0N,L1N,L2N,L3N;right:R3N;canal:R2N@5#N;sign:L;needle:0;flow:Equidad",
-                "STATE:left:L0N,L1N,L2N,L3N;right:R3N;canal:R2N@4#N;sign:L;needle:0;flow:Equidad",
-                "STATE:left:L0N,L1N,L2N,L3N;right:R3N;canal:R2N@3#N;sign:L;needle:0;flow:Equidad",
-                "STATE:left:L0N,L1N,L2N,L3N;right:R3N;canal:R2N@2#N;sign:L;needle:0;flow:Equidad",
-                "STATE:left:L0N,L1N,L2N,L3N;right:R3N;canal:R2N@1#N;sign:L;needle:0;flow:Equidad",
-                "STATE:left:L0N,L1N,L2N,L3N;right:R3N;canal:R2N@0#N;sign:L;needle:0;flow:Equidad",
-                "STATE:left:L0N,L1N,L2N,L3N;right:R3N;canal:;sign:L;needle:0;flow:Equidad",
-                # Barco R3N
-                "STATE:left:L0N,L1N,L2N,L3N;right:;canal:R3N@10#N;sign:L;needle:0;flow:Equidad",
-                "STATE:left:L0N,L1N,L2N,L3N;right:;canal:R3N@9#N;sign:L;needle:0;flow:Equidad",
-                "STATE:left:L0N,L1N,L2N,L3N;right:;canal:R3N@8#N;sign:L;needle:0;flow:Equidad",
-                "STATE:left:L0N,L1N,L2N,L3N;right:;canal:R3N@7#N;sign:L;needle:0;flow:Equidad",
-                "STATE:left:L0N,L1N,L2N,L3N;right:;canal:R3N@6#N;sign:L;needle:0;flow:Equidad",
-                "STATE:left:L0N,L1N,L2N,L3N;right:;canal:R3N@5#N;sign:L;needle:0;flow:Equidad",
-                "STATE:left:L0N,L1N,L2N,L3N;right:;canal:R3N@4#N;sign:L;needle:0;flow:Equidad",
-                "STATE:left:L0N,L1N,L2N,L3N;right:;canal:R3N@3#N;sign:L;needle:0;flow:Equidad",
-                "STATE:left:L0N,L1N,L2N,L3N;right:;canal:R3N@2#N;sign:L;needle:0;flow:Equidad",
-                "STATE:left:L0N,L1N,L2N,L3N;right:;canal:R3N@1#N;sign:L;needle:0;flow:Equidad",
-                "STATE:left:L0N,L1N,L2N,L3N;right:;canal:R3N@0#N;sign:L;needle:0;flow:Equidad",
-                "STATE:left:L0N,L1N,L2N,L3N;right:;canal:;sign:L;needle:0;flow:Equidad",
-                # Cambiar sentido a DERECHA
-                "STATE:left:L0N,L1N,L2N,L3N;right:;canal:;sign:R;needle:0;flow:Equidad",
-                # Barco L0N
-                "STATE:left:L1N,L2N,L3N;right:;canal:L0N@0#N;sign:R;needle:0;flow:Equidad",
-                "STATE:left:L1N,L2N,L3N;right:;canal:L0N@1#N;sign:R;needle:0;flow:Equidad",
-                "STATE:left:L1N,L2N,L3N;right:;canal:L0N@2#N;sign:R;needle:0;flow:Equidad",
-                "STATE:left:L1N,L2N,L3N;right:;canal:L0N@3#N;sign:R;needle:0;flow:Equidad",
-                "STATE:left:L1N,L2N,L3N;right:;canal:L0N@4#N;sign:R;needle:0;flow:Equidad",
-                "STATE:left:L1N,L2N,L3N;right:;canal:L0N@5#N;sign:R;needle:0;flow:Equidad",
-                "STATE:left:L1N,L2N,L3N;right:;canal:L0N@6#N;sign:R;needle:0;flow:Equidad",
-                "STATE:left:L1N,L2N,L3N;right:;canal:L0N@7#N;sign:R;needle:0;flow:Equidad",
-                "STATE:left:L1N,L2N,L3N;right:;canal:L0N@8#N;sign:R;needle:0;flow:Equidad",
-                "STATE:left:L1N,L2N,L3N;right:;canal:L0N@9#N;sign:R;needle:0;flow:Equidad",
-                "STATE:left:L1N,L2N,L3N;right:;canal:L0N@10#N;sign:R;needle:0;flow:Equidad",
-                "STATE:left:L1N,L2N,L3N;right:;canal:;sign:R;needle:0;flow:Equidad",
-                # Barco L1N
-                "STATE:left:L2N,L3N;right:;canal:L1N@0#N;sign:R;needle:0;flow:Equidad",
-                "STATE:left:L2N,L3N;right:;canal:L1N@1#N;sign:R;needle:0;flow:Equidad",
-                "STATE:left:L2N,L3N;right:;canal:L1N@2#N;sign:R;needle:0;flow:Equidad",
-                "STATE:left:L2N,L3N;right:;canal:L1N@3#N;sign:R;needle:0;flow:Equidad",
-                "STATE:left:L2N,L3N;right:;canal:L1N@4#N;sign:R;needle:0;flow:Equidad",
-                "STATE:left:L2N,L3N;right:;canal:L1N@5#N;sign:R;needle:0;flow:Equidad",
-                "STATE:left:L2N,L3N;right:;canal:L1N@6#N;sign:R;needle:0;flow:Equidad",
-                "STATE:left:L2N,L3N;right:;canal:L1N@7#N;sign:R;needle:0;flow:Equidad",
-                "STATE:left:L2N,L3N;right:;canal:L1N@8#N;sign:R;needle:0;flow:Equidad",
-                "STATE:left:L2N,L3N;right:;canal:L1N@9#N;sign:R;needle:0;flow:Equidad",
-                "STATE:left:L2N,L3N;right:;canal:L1N@10#N;sign:R;needle:0;flow:Equidad",
-                "STATE:left:L2N,L3N;right:;canal:;sign:R;needle:0;flow:Equidad",
-                # Barco L2N
-                "STATE:left:L3N;right:;canal:L2N@0#N;sign:R;needle:0;flow:Equidad",
-                "STATE:left:L3N;right:;canal:L2N@1#N;sign:R;needle:0;flow:Equidad",
-                "STATE:left:L3N;right:;canal:L2N@2#N;sign:R;needle:0;flow:Equidad",
-                "STATE:left:L3N;right:;canal:L2N@3#N;sign:R;needle:0;flow:Equidad",
-                "STATE:left:L3N;right:;canal:L2N@4#N;sign:R;needle:0;flow:Equidad",
-                "STATE:left:L3N;right:;canal:L2N@5#N;sign:R;needle:0;flow:Equidad",
-                "STATE:left:L3N;right:;canal:L2N@6#N;sign:R;needle:0;flow:Equidad",
-                "STATE:left:L3N;right:;canal:L2N@7#N;sign:R;needle:0;flow:Equidad",
-                "STATE:left:L3N;right:;canal:L2N@8#N;sign:R;needle:0;flow:Equidad",
-                "STATE:left:L3N;right:;canal:L2N@9#N;sign:R;needle:0;flow:Equidad",
-                "STATE:left:L3N;right:;canal:L2N@10#N;sign:R;needle:0;flow:Equidad",
-                "STATE:left:L3N;right:;canal:;sign:R;needle:0;flow:Equidad",
-                # Barco L3N
-                "STATE:left:;right:;canal:L3N@0#N;sign:R;needle:0;flow:Equidad",
-                "STATE:left:;right:;canal:L3N@1#N;sign:R;needle:0;flow:Equidad",
-                "STATE:left:;right:;canal:L3N@2#N;sign:R;needle:0;flow:Equidad",
-                "STATE:left:;right:;canal:L3N@3#N;sign:R;needle:0;flow:Equidad",
-                "STATE:left:;right:;canal:L3N@4#N;sign:R;needle:0;flow:Equidad",
-                "STATE:left:;right:;canal:L3N@5#N;sign:R;needle:0;flow:Equidad",
-                "STATE:left:;right:;canal:L3N@6#N;sign:R;needle:0;flow:Equidad",
-                "STATE:left:;right:;canal:L3N@7#N;sign:R;needle:0;flow:Equidad",
-                "STATE:left:;right:;canal:L3N@8#N;sign:R;needle:0;flow:Equidad",
-                "STATE:left:;right:;canal:L3N@9#N;sign:R;needle:0;flow:Equidad",
-                "STATE:left:;right:;canal:L3N@10#N;sign:R;needle:0;flow:Equidad",
-                "STATE:left:;right:;canal:;sign:R;needle:0;flow:Equidad",
+            puerto = 'COM4' if platform.system() == 'Windows' else '/dev/ttyUSB0'
+            self.ser = serial.Serial(
+                puerto,
+                115200,
+                timeout=0.02,
+                write_timeout=3,
+                rtscts=False,
+                dsrdtr=False,
+                xonxoff=False
+            )
+
+
+            time.sleep(1.5)
+
+            self.ser.reset_input_buffer()
+            self.ser.reset_output_buffer()
+
+            if not self._esperar_esp_ready():
+                print("No se recibio UI_READY desde la ESP.")
+                self.simulacion = True
+                return
+
+            comandos = [
+                f"CFG_LEN:{config['canalLength']}",
+                f"CFG_Q:{config['queueSize']}",
+                f"CFG_S:{config['schedulerType']}",
+                f"CFG_F:{config['flowType']}",
+                f"CFG_W:{config['fairnessW']}",
+                f"CFG_SIGN:{config['signInterval']}",
+                f"CFG_RR:{config['rrQuantum']}",
+                f"CFG_MODE:{config.get('generationMode', 'Fijo')}",
             ]
+
+            for cmd in comandos:
+                if not self._send_line(cmd):
+                    print("No se pudo enviar configuración completa.")
+                    self.simulacion = True
+                    return
+
+                if not self._read_until_ack("ACK:CFG"):
+                    print("No se recibio ACK:CFG.")
+                    self.simulacion = True
+                    return
+
+            time.sleep(0.1)
+
+            if not self._enviar_barcos_iniciales(config):
+                print("No se pudieron enviar barcos iniciales.")
+                self.simulacion = True
+                return
+
+            time.sleep(0.1)
+
+            if not self._send_line("START"):
+                self.simulacion = True
+                return
+
+            if not self._read_until_ack("ACK:START"):
+                print("No se recibio ACK:START.")
+                self.simulacion = True
+                return
+
+            self.simulacion = False
+            print("Interfaz conectada a ESP32.")
+
+        except Exception as e:
+            self.simulacion = True
+            print(f"Iniciando en modo simulación. Error serial: {e}")
+
 
         # Cargar la vista del canal
         self.vista = CanalView(self.root, self.modelo)
@@ -195,41 +151,35 @@ class CanalController:
         self.actualizar_loop()
 
     def actualizar_loop(self):
-        if self.simulacion:
-            if hasattr(self, 'estados_simulacion') and hasattr(self, 'estado_index'):
-                if self.estado_index < len(self.estados_simulacion):
-                    data = self.estados_simulacion[self.estado_index]
-                    self.procesar_estado(data)
-                    self.estado_index += 1
-                else:
-                    print("Simulación terminada: todos los barcos han cruzado el canal.")
-                    self.root.quit()
-            else:
-                self.sim_time += 1
-                self.barco_pos = (self.sim_time // 5) % (self.modelo.largo + 1)
-                sentido = "IZQUIERDA" if self.barco_pos < self.modelo.largo // 2 else "DERECHA"
-                sign = 'L' if sentido == "IZQUIERDA" else 'R'
-                data = f"STATE:left:L0N,L1F,L2P;right:R0N,R1F;canal:L0N@{self.barco_pos}#N;sign:{sign};needle:0;flow:Equidad"
-                self.procesar_estado(data)
-        else:
-            if hasattr(self, 'ser') and self.ser.in_waiting > 0:
-                try:
-                    linea = self.ser.readline().decode('utf-8').strip()
-                    if linea.startswith("STATE:"):
-                        self.procesar_estado(linea)
-                except Exception as e:
-                    print(f"Error de lectura: {e}")
+        latest_state = None
 
-        # Actualizar la interfaz
+        if not self.simulacion and self.ser:
+            try:
+                # Leer todo lo disponible para no quedarse atrasado
+                while self.ser.in_waiting > 0:
+                    linea = self.ser.readline().decode("utf-8", errors="ignore").strip()
+
+                    if linea.startswith("STATE:"):
+                        latest_state = linea
+                    elif linea:
+                        print("RX:", linea)
+
+                # Procesar solo el ultimo STATE recibido
+                if latest_state:
+                    self.procesar_estado(latest_state)
+
+            except Exception as e:
+                print(f"Error de lectura: {e}")
+
         if self.vista:
             self.vista.actualizar_letrero(self.modelo.sentido_actual)
             self.vista.actualizar_barcos(
-                self.modelo.cola_izq, 
-                self.modelo.cola_der, 
-                self.modelo.barco_canal
+                self.modelo.cola_izq,
+                self.modelo.cola_der,
+                self.modelo.barcos_canal
             )
-        
-        self.root.after(200, self.actualizar_loop)
+
+        self.root.after(UI_REFRESH_MS, self.actualizar_loop)
 
     def procesar_estado(self, data):
         try:
@@ -248,12 +198,30 @@ class CanalController:
 
             # Actualizar canal
             canal_data = dict_datos.get('canal', '')
-            if '@' in canal_data:
-                datos, tipo = canal_data.split('#') if '#' in canal_data else (canal_data, 'N')
-                ship_id, pos = datos.split('@')
-                self.modelo.actualizar_canal(ship_id, int(pos), tipo)
-            else:
-                self.modelo.actualizar_canal(None, 0)
+            barcos_canal = []
+
+            if canal_data:
+                items = [item for item in canal_data.split(',') if item]
+
+                for item in items:
+                    try:
+                        if '#' in item:
+                            datos, tipo = item.split('#', 1)
+                        else:
+                            datos, tipo = item, 'N'
+
+                        ship_id, pos = datos.split('@', 1)
+
+                        barcos_canal.append({
+                            "id": ship_id,
+                            "pos": int(pos),
+                            "tipo": tipo
+                        })
+
+                    except ValueError:
+                        print(f"Advertencia: no se pudo parsear barco en canal: {item}")
+
+            self.modelo.actualizar_canal(barcos_canal)
 
             # Actualizar agujas (estado único para ambos extremos)
             agujas_activas = False
@@ -288,6 +256,10 @@ class CanalController:
     def generar_barco(self, lado):
         if not self.vista:
             return
+
+        if self.generation_mode == "Fijo":
+            print("Modo fijo activo: no se pueden generar barcos durante la ejecución.")
+            return
         
         # Verificar que haya espacio en la cola (máximo self.queue_size barcos por cola)
         if lado == 'L' and len(self.modelo.cola_izq) >= self.queue_size:
@@ -303,16 +275,49 @@ class CanalController:
 
         comando = f"GEN:{lado}:{tipo}\n"
         if not self.simulacion and self.ser:
-            try:
-                self.ser.write(comando.encode())
-            except Exception as e:
-                print(f"Error serial al generar barco: {e}")
+            if not self._send_line(f"GEN:{lado}:{tipo}"):
+                print("Error serial al generar barco dinámico.")
         else:
             nuevo_id = f"{lado}{self.id_counter}{tipo}"
             self.id_counter += 1
             self.modelo.agregar_barco_cola(lado, nuevo_id)
 
         print(f"Generar barco -> lado={lado}, tipo={tipo}, comando={comando.strip()}")
+
+    def _enviar_barcos_iniciales(self, config):
+        import time
+
+        tipo_map = {
+            "normal": "N",
+            "pesquera": "F",
+            "patrulla": "P"
+        }
+
+        for tipo, count in config["leftInitialShips"].items():
+            tipo_code = tipo_map.get(tipo, "N")
+
+            for _ in range(count):
+                if not self._send_line(f"GEN:L:{tipo_code}"):
+                    return False
+
+                if not self._read_until_ack("ACK:GEN"):
+                    return False
+
+                time.sleep(0.05)
+
+        for tipo, count in config["rightInitialShips"].items():
+            tipo_code = tipo_map.get(tipo, "N")
+
+            for _ in range(count):
+                if not self._send_line(f"GEN:R:{tipo_code}"):
+                    return False
+
+                if not self._read_until_ack("ACK:GEN"):
+                    return False
+
+                time.sleep(0.05)
+
+        return True
 
     def _on_key_press(self, event):
         key = getattr(event, 'keysym', '').lower()
@@ -322,6 +327,79 @@ class CanalController:
             self.generar_barco('R')
         elif key == 'w':
             self.cerrar_programa()
+
+    def _esperar_esp_ready(self, timeout_s=8):
+        import time
+
+        start = time.time()
+        last_ping = 0
+
+        while time.time() - start < timeout_s:
+            now = time.time()
+
+            if now - last_ping >= 0.5:
+                if not self._send_line("PING"):
+                    return False
+                last_ping = now
+
+            try:
+                linea = self.ser.readline().decode("utf-8", errors="ignore").strip()
+
+                if linea:
+                    print("RX:", linea)
+
+                if linea == "ACK:PING":
+                    return True
+
+            except Exception as e:
+                print(f"Error esperando ACK:PING: {e}")
+                return False
+
+        return False
+
+    def _send_line(self, line):
+        if not self.ser or not self.ser.is_open:
+            print("Serial no disponible.")
+            return False
+
+        try:
+            msg = line.strip() + "\n"
+            data = msg.encode("utf-8")
+
+            print("TX:", msg.strip())
+
+            written = self.ser.write(data)
+
+            if written != len(data):
+                print(f"Advertencia: solo se escribieron {written}/{len(data)} bytes")
+                return False
+
+            return True
+
+        except Exception as e:
+            print(f"Error enviando linea serial '{line}': {e}")
+            return False
+
+    def _read_until_ack(self, expected, timeout_s=3):
+        import time
+
+        start = time.time()
+
+        while time.time() - start < timeout_s:
+            try:
+                linea = self.ser.readline().decode("utf-8", errors="ignore").strip()
+
+                if linea:
+                    print("RX:", linea)
+
+                if linea == expected:
+                    return True
+
+            except Exception as e:
+                print(f"Error esperando {expected}: {e}")
+                return False
+
+        return False
 
     def cerrar_programa(self, event=None):
         if not self.simulacion and hasattr(self, 'ser'):

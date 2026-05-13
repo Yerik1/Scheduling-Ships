@@ -19,7 +19,7 @@ class ConfigView:
 
         tk.Label(frame_general, text="Largo del Canal (unidades):", bg="lightblue", font=("Arial", 10, "bold")).grid(row=0, column=0, sticky=tk.W, pady=5)
         self.entry_largo = tk.Entry(frame_general, width=10)
-        self.entry_largo.insert(0, "10")
+        self.entry_largo.insert(0, "6")
         self.entry_largo.grid(row=0, column=1, pady=5)
         self.widgets.extend([frame_general.children['!label'], self.entry_largo])
 
@@ -43,22 +43,39 @@ class ConfigView:
         self.combo_flujo.bind('<<ComboboxSelected>>', self._update_fields)
         self.widgets.append(self.combo_flujo)
 
-        tk.Label(frame_general, text="Fairness W:", bg="lightblue", font=("Arial", 10, "bold")).grid(row=4, column=0, sticky=tk.W, pady=5)
+        tk.Label(
+            frame_general,
+            text="Modo de Generación:",
+            bg="lightblue",
+            font=("Arial", 10, "bold")
+        ).grid(row=4, column=0, sticky=tk.W, pady=5)
+
+        self.combo_modo = ttk.Combobox(
+            frame_general,
+            values=["Fijo", "Dinamico"],
+            width=15,
+            state="readonly"
+        )
+        self.combo_modo.current(0)
+        self.combo_modo.grid(row=4, column=1, pady=5)
+        self.widgets.append(self.combo_modo)
+
+        tk.Label(frame_general, text="Fairness W:", bg="lightblue", font=("Arial", 10, "bold")).grid(row=5, column=0, sticky=tk.W, pady=5)
         self.entry_fairness_w = tk.Entry(frame_general, width=10)
         self.entry_fairness_w.insert(0, "1")
-        self.entry_fairness_w.grid(row=4, column=1, pady=5)
+        self.entry_fairness_w.grid(row=5, column=1, pady=5)
         self.widgets.append(self.entry_fairness_w)
 
-        tk.Label(frame_general, text="Sign Interval (ms):", bg="lightblue", font=("Arial", 10, "bold")).grid(row=5, column=0, sticky=tk.W, pady=5)
+        tk.Label(frame_general, text="Sign Interval (ms):", bg="lightblue", font=("Arial", 10, "bold")).grid(row=6, column=0, sticky=tk.W, pady=5)
         self.entry_sign_interval = tk.Entry(frame_general, width=10)
         self.entry_sign_interval.insert(0, "1000")
-        self.entry_sign_interval.grid(row=5, column=1, pady=5)
+        self.entry_sign_interval.grid(row=6, column=1, pady=5)
         self.widgets.append(self.entry_sign_interval)
 
-        tk.Label(frame_general, text="RR Quantum:", bg="lightblue", font=("Arial", 10, "bold")).grid(row=6, column=0, sticky=tk.W, pady=5)
+        tk.Label(frame_general, text="RR Quantum:", bg="lightblue", font=("Arial", 10, "bold")).grid(row=7, column=0, sticky=tk.W, pady=5)
         self.entry_rr_quantum = tk.Entry(frame_general, width=10)
         self.entry_rr_quantum.insert(0, "10")
-        self.entry_rr_quantum.grid(row=6, column=1, pady=5)
+        self.entry_rr_quantum.grid(row=7, column=1, pady=5)
         self.widgets.append(self.entry_rr_quantum)
 
         # Frame para barcos iniciales
@@ -162,6 +179,32 @@ class ConfigView:
                 messagebox.showerror("Error de Validación", "El tamaño de la cola debe ser entre 1 y 4.")
                 return
 
+            left_total = (
+                    int(self.entry_left_normal.get()) +
+                    int(self.entry_left_pesquera.get()) +
+                    int(self.entry_left_patrulla.get())
+            )
+
+            right_total = (
+                    int(self.entry_right_normal.get()) +
+                    int(self.entry_right_pesquera.get()) +
+                    int(self.entry_right_patrulla.get())
+            )
+
+            if left_total > queue_size:
+                messagebox.showerror(
+                    "Error de Validación",
+                    "La cantidad inicial de barcos en la cola izquierda supera el tamaño máximo de cola."
+                )
+                return
+
+            if right_total > queue_size:
+                messagebox.showerror(
+                    "Error de Validación",
+                    "La cantidad inicial de barcos en la cola derecha supera el tamaño máximo de cola."
+                )
+                return
+
             if flow == "Equidad":
                 fairness_w = int(self.entry_fairness_w.get())
                 if fairness_w <= 0 or fairness_w > queue_size:
@@ -176,6 +219,7 @@ class ConfigView:
             "queueSize": int(self.entry_queue_size.get()),
             "schedulerType": self.combo_algo.get(),
             "flowType": self.combo_flujo.get(),
+            "generationMode": self.combo_modo.get(),
             "leftInitialShips": {
                 "normal": int(self.entry_left_normal.get()),
                 "pesquera": int(self.entry_left_pesquera.get()),
