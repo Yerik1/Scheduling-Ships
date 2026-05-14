@@ -8,11 +8,11 @@
 #include "driver/gpio.h"
 
 #ifndef DIRECTION_LEFT_GPIO
-#define DIRECTION_LEFT_GPIO 10
+#define DIRECTION_LEFT_GPIO 11
 #endif
 
 #ifndef DIRECTION_RIGHT_GPIO
-#define DIRECTION_RIGHT_GPIO 11
+#define DIRECTION_RIGHT_GPIO 10
 #endif
 
 bool direction_leds_init(void)

@@ -16,5 +16,6 @@ bool proximity_sensor_is_active(void);
 void proximity_sensor_clear_trigger(void);
 
 void proximity_sensor_set_notify_task(TaskHandle_t taskHandle);
+void proximity_sensor_trigger_ping(void);
 
 #endif // PROXIMITY_SENSOR_H

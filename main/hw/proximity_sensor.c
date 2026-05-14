@@ -6,9 +6,9 @@
 #include "freertos/task.h"
 
 // Configuración de Pines
-#define PROXIMITY_SENSOR_ECHO_GPIO 3
-#define PROXIMITY_SENSOR_TRIG_GPIO 4
-#define DISTANCE_THRESHOLD_CM 3
+#define PROXIMITY_SENSOR_ECHO_GPIO 2
+#define PROXIMITY_SENSOR_TRIG_GPIO 3
+#define DISTANCE_THRESHOLD_CM 5
 
 static volatile bool sensorTriggered = false;
 static TaskHandle_t notifyTaskHandle = NULL;
@@ -97,4 +97,10 @@ void proximity_sensor_clear_trigger(void)
 void proximity_sensor_set_notify_task(TaskHandle_t taskHandle)
 {
     notifyTaskHandle = taskHandle;
+}
+
+bool proximity_sensor_is_active(void)
+{
+    // Retornamos el estado de la variable volátil que el ISR modifica
+    return sensorTriggered;
 }
