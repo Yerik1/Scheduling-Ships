@@ -189,10 +189,10 @@ class ConfigView:
         if scheduler != "EDF":
             self._disable_entry(self.entry_deadline)
         
-        if flow == "Letrero":
+        if flow != "Letrero":
             self._disable_entry(self.entry_sign_interval)
         
-        if flow == "Equidad":
+        if flow != "Equidad":
             self._disable_entry(self.entry_fairness_w)
     
     def _disable_entry(self, entry):
