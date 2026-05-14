@@ -524,6 +524,12 @@ static void handle_proximity_interrupt(void)
             for (int i = 0; i < count; i++)
             {
                 ShipTask *task = tasks[i];
+
+                // Save Ship Position
+                task->savedPosition = task->ship.position;
+                task->hasCheckpoint = true;
+
+                task->ship.state = READY;
                 ShipTask *removedTask = canal_remove_task(&demoCanal, task);
 
                 if (removedTask == NULL)
@@ -845,110 +851,129 @@ static void ship_task_entry(void *params)
         state_to_string(shipTask->ship.state),
         shipTask->effectiveSpeed);
 
-    /*
-     * Espera bloqueada hasta que el barco entre al canal.
-     * SimulationTask debe notificar cuando el barco entra.
-     */
-    while (systemRunning && shipTask->ship.state != RUNNING)
+    while (systemRunning)
     {
-        ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
-    }
-
-    if (!systemRunning)
-    {
-        vTaskDelete(NULL);
-        return;
-    }
-
-    printf(
-        "[%s] Entro al canal | Posicion: %d\n",
-        shipTask->taskName,
-        shipTask->ship.position);
-
-    bool firstMovementAfterEntry = true;
-
-    while (systemRunning && shipTask->ship.state != FINISHED)
-    {
-
-        /*
-         * La primera vez no espera otra notificación.
-         * Usa la misma notificación que recibió al entrar al canal.
-         */
-        if (!firstMovementAfterEntry)
+        while (systemRunning && shipTask->ship.state != RUNNING)
         {
             ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
         }
-        else
-        {
-            firstMovementAfterEntry = false;
-        }
 
         if (!systemRunning)
-        {
             break;
+
+        if (shipTask->hasCheckpoint)
+        {
+            printf(
+                "[%s] Reanudando desde checkpoint | Posicion guardada: %d\n",
+                shipTask->taskName,
+                shipTask->savedPosition);
+
+            canal_set_ship_position(&demoCanal, shipTask, shipTask->savedPosition);
+
+            shipTask->hasCheckpoint = false;
+            shipTask->savedPosition = 0;
+        }
+        else
+        {
+            printf(
+                "[%s] Entro al canal | Posicion: %d\n",
+                shipTask->taskName,
+                shipTask->ship.position);
         }
 
-        if (shipTask->ship.state != RUNNING)
+        bool firstMovementAfterEntry = true;
+
+        while (systemRunning && shipTask->ship.state != FINISHED)
         {
-            continue;
-        }
 
-        shipTask->moveCredit += shipTask->effectiveSpeed;
-
-        bool movedAtLeastOnce = false;
-        bool blocked = false;
-
-        /*
-         * Cantidad máxima de pasos unitarios que puede intentar este barco
-         * en este tick según su crédito acumulado.
-         */
-        int stepsThisTick = (int)shipTask->moveCredit;
-
-        if (stepsThisTick < 1)
-        {
-            stepsThisTick = 0;
-        }
-
-        int substepDelayMs = get_substep_delay_ms(shipTask, stepsThisTick);
-
-        while (
-            shipTask->moveCredit >= 1.0f &&
-            shipTask->ship.state != FINISHED &&
-            systemRunning)
-        {
-            bool moved = canal_move_one_step(&demoCanal, shipTask);
-
-            if (moved)
+            /*
+             * La primera vez no espera otra notificación.
+             * Usa la misma notificación que recibió al entrar al canal.
+             */
+            if (!firstMovementAfterEntry)
             {
-                movedAtLeastOnce = true;
-                shipTask->moveCredit -= 1.0f;
-
-                render_outputs();
-
-                /*
-                 * Divide el tick entre los pasos del barco.
-                 * Ej:
-                 * speed 2 -> 500 ms
-                 * speed 3 -> 333 ms
-                 */
-                vTaskDelay(pdMS_TO_TICKS(substepDelayMs));
+                ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
             }
             else
             {
-                blocked = true;
-                shipTask->moveCredit = 0.0f;
+                firstMovementAfterEntry = false;
+            }
+
+            if (!systemRunning)
+            {
                 break;
+            }
+
+            if (shipTask->ship.state == READY)
+            {
+                break;
+            }
+
+            if (shipTask->ship.state != RUNNING)
+            {
+                continue;
+            }
+
+            shipTask->moveCredit += shipTask->effectiveSpeed;
+
+            bool movedAtLeastOnce = false;
+            bool blocked = false;
+
+            /*
+             * Cantidad máxima de pasos unitarios que puede intentar este barco
+             * en este tick según su crédito acumulado.
+             */
+            int stepsThisTick = (int)shipTask->moveCredit;
+
+            if (stepsThisTick < 1)
+            {
+                stepsThisTick = 0;
+            }
+
+            int substepDelayMs = get_substep_delay_ms(shipTask, stepsThisTick);
+
+            while (
+                shipTask->moveCredit >= 1.0f &&
+                shipTask->ship.state != FINISHED &&
+                systemRunning)
+            {
+                bool moved = canal_move_one_step(&demoCanal, shipTask);
+
+                if (moved)
+                {
+                    movedAtLeastOnce = true;
+                    shipTask->moveCredit -= 1.0f;
+
+                    render_outputs();
+
+                    /*
+                     * Divide el tick entre los pasos del barco.
+                     * Ej:
+                     * speed 2 -> 500 ms
+                     * speed 3 -> 333 ms
+                     */
+                    vTaskDelay(pdMS_TO_TICKS(substepDelayMs));
+                }
+                else
+                {
+                    blocked = true;
+                    shipTask->moveCredit = 0.0f;
+                    break;
+                }
+            }
+
+            if (!movedAtLeastOnce && !blocked && shipTask->moveCredit < 1.0f)
+            {
+                printf(
+                    "[%s] Acumulando credito | Credito: %.2f | Velocidad efectiva: %.2f\n",
+                    shipTask->taskName,
+                    shipTask->moveCredit,
+                    shipTask->effectiveSpeed);
             }
         }
 
-        if (!movedAtLeastOnce && !blocked && shipTask->moveCredit < 1.0f)
-        {
-            printf(
-                "[%s] Acumulando credito | Credito: %.2f | Velocidad efectiva: %.2f\n",
-                shipTask->taskName,
-                shipTask->moveCredit,
-                shipTask->effectiveSpeed);
-        }
+        if (shipTask->ship.state == FINISHED)
+            break;
     }
 
     if (shipTask->ship.state == FINISHED)
