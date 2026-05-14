@@ -26,7 +26,9 @@
 #define COMMAND_TASK_STACK_SIZE 4096
 #define COMMAND_TASK_PRIORITY 4
 #define PROXIMITY_TASK_PRIORITY (SIMULATION_TASK_PRIORITY + 1)
-#define MOVEMENT_SUBSTEP_MS 250
+#define MOVEMENT_BASE_MS 1000
+#define MOVEMENT_SUBTICK_MS 100
+#define MOVEMENT_SETTLE_MS 20
 
 static AppConfig config;
 
@@ -52,7 +54,6 @@ static void ship_task_entry(void *params);
 static void proximity_task(void *params);
 
 static void wait_for_ui_start(void);
-static bool process_conf_command(char *line);
 static bool process_gen_command(char *line, bool isInitialLoad);
 static bool create_ship_from_ui(char sideChar, char typeChar);
 
@@ -68,7 +69,6 @@ static int select_scheduler_index(SchedulerType schedulerType, ReadyQueue *queue
 
 static const char *flow_decision_to_string(FLOWDECISION decision);
 static const char *flow_type_to_string(FLOWTYPE type);
-static const char *scheduler_type_to_string(SchedulerType type);
 static const char *ship_type_to_string(ShipType type);
 static const char *direction_to_string(Direction direction);
 static const char *state_to_string(ShipState state);
@@ -77,11 +77,11 @@ static float get_effective_ship_speed(ShipTask *shipTask);
 
 static bool take_queues(void);
 static void give_queues(void);
-static bool configReceived = false;
 static bool is_proximity_safety_active(void);
 static void handle_proximity_interrupt(void);
 static void notify_ships_and_render(void);
-static int get_substep_delay_ms(ShipTask *shipTask, int stepsThisTick);
+static bool try_release_one_ship_to_canal(int *rrIndexLeft, int *rrIndexRight);
+static bool fixed_simulation_finished(void);
 
 void app_main(void)
 {
@@ -234,12 +234,7 @@ static bool process_cfg_command(char *line)
     {
         int signIntervalMs = atoi(line + 9);
 
-        if (config.tickMs <= 0)
-        {
-            config.tickMs = 500;
-        }
-
-        config.signInterval = (signIntervalMs + config.tickMs - 1) / config.tickMs;
+        config.signInterval = (signIntervalMs + MOVEMENT_BASE_MS - 1) / MOVEMENT_BASE_MS;
 
         if (config.signInterval <= 0)
         {
@@ -595,19 +590,18 @@ static void simulation_task(void *params)
 {
     (void)params;
 
-    int tick = 0;
+    int subtick = 0;
     int rrIndexLeft = 0;
     int rrIndexRight = 0;
+    int elapsedBaseMs = 0;
 
     printf("SimulationTask iniciada.\n\n");
 
     while (systemRunning)
     {
-        tick++;
+        subtick++;
 
         proximity_sensor_trigger_ping();
-
-        printf("\n---------- TICK %d ----------\n", tick);
 
         if (hardware_sensor_active() && !is_proximity_safety_active())
         {
@@ -622,168 +616,59 @@ static void simulation_task(void *params)
                 canal_unblock(&demoCanal);
                 proximitySafetyActive = false;
             }
-        }
 
-        flow_policy_on_tick(&flowPolicy);
-
-        if (!take_queues())
-        {
-            printf("No se pudo tomar semaforo de colas en SimulationTask.\n");
             render_outputs();
-            vTaskDelay(pdMS_TO_TICKS(config.tickMs));
+            vTaskDelay(pdMS_TO_TICKS(MOVEMENT_SUBTICK_MS));
             continue;
         }
 
-        FLOWDECISION decision = flow_policy_select_side(
-            &flowPolicy,
-            &leftQueue,
-            &rightQueue);
+        /*
+         * La politica de flujo avanza cada tick base, no cada subtick.
+         */
+        elapsedBaseMs += MOVEMENT_SUBTICK_MS;
 
-        printf(
-            "FlowPolicy: %s | Direccion actual: %s | Decision: %s\n",
-            flow_type_to_string(flowPolicy.type),
-            flow_decision_to_string(flowPolicy.direction),
-            flow_decision_to_string(decision));
-
-        ReadyQueue *selectedQueue = NULL;
-        FLOWDECISION releasedSide = FLOW_NONE;
-
-        if (decision == FLOW_LEFT)
+        if (elapsedBaseMs >= MOVEMENT_BASE_MS)
         {
-            selectedQueue = &leftQueue;
-            releasedSide = FLOW_LEFT;
-        }
-        else if (decision == FLOW_RIGHT)
-        {
-            selectedQueue = &rightQueue;
-            releasedSide = FLOW_RIGHT;
-        }
+            elapsedBaseMs = 0;
+            flow_policy_on_tick(&flowPolicy);
 
-        if (selectedQueue == NULL || queue_is_empty(selectedQueue))
-        {
-            printf("No se libero ningun barco este tick.\n");
-
-            bool fixedFinished =
-                !dynamicGenerationEnabled &&
-                queue_is_empty(&leftQueue) &&
-                queue_is_empty(&rightQueue) &&
-                canal_is_empty(&demoCanal);
-
-            give_queues();
-
-            notify_ships_and_render();
-
-            if (fixedFinished)
-            {
-                printf("\nNo quedan barcos en colas ni en canal. Simulacion fija finalizada.\n");
-                break;
-            }
-
-            vTaskDelay(pdMS_TO_TICKS(config.tickMs));
-            continue;
-        }
-
-        int selectedIndex = -1;
-
-        if (config.schedulerType == SCHD_RR)
-        {
-            if (releasedSide == FLOW_LEFT)
-            {
-                selectedIndex = scheduler_rr(selectedQueue, config.rrQuantum, &rrIndexLeft);
-            }
-            else
-            {
-                selectedIndex = scheduler_rr(selectedQueue, config.rrQuantum, &rrIndexRight);
-            }
-        }
-        else
-        {
-            selectedIndex = select_scheduler_index(config.schedulerType, selectedQueue);
-        }
-
-        if (selectedIndex < 0)
-        {
-            printf("Scheduler no selecciono ningun barco.\n");
-            give_queues();
-            notify_ships_and_render();
-            vTaskDelay(pdMS_TO_TICKS(config.tickMs));
-            continue;
-        }
-
-        ShipTask *selectedTask = queue_get(selectedQueue, selectedIndex);
-
-        if (selectedTask == NULL)
-        {
-            printf("La task seleccionada es NULL.\n");
-            give_queues();
-            notify_ships_and_render();
-            vTaskDelay(pdMS_TO_TICKS(config.tickMs));
-            continue;
-        }
-
-        printf(
-            "Scheduler selecciono barco %d | Tipo: %s | Origen: %s | Pos: %d\n",
-            selectedTask->ship.id,
-            ship_type_to_string(selectedTask->ship.type),
-            direction_to_string(selectedTask->ship.origin),
-            selectedTask->ship.position);
-
-        bool entered = false;
-
-        if (selectedTask->hasCheckpoint)
-        {
-            // Re-ingreso tras interrupción: volver a la posición guardada
-            entered = canal_enter_at(&demoCanal, selectedTask, selectedTask->savedPosition);
-
-            if (entered)
-            {
-                selectedTask->moveCredit = selectedTask->savedMoveCredit;
-                selectedTask->hasCheckpoint = false;
-                selectedTask->savedPosition = 0;
-                selectedTask->savedMoveCredit = 0.0f;
-            }
-        }
-        else
-        {
-            entered = canal_enter(&demoCanal, selectedTask);
-        }
-
-        if (entered)
-        {
+            printf("\n---------- BASE TICK ----------\n");
             printf(
-                "Barco %d entro exitosamente desde %s\n",
-                selectedTask->ship.id,
-                flow_decision_to_string(releasedSide));
-
-            selectedTask->justEntered = true;
-
-            queue_remove(selectedQueue, selectedIndex);
-            flow_policy_on_ship_released(&flowPolicy, releasedSide);
-        }
-        else
-        {
-            printf(
-                "Barco %d no pudo entrar al canal todavia.\n",
-                selectedTask->ship.id);
+                "FlowPolicy: %s | Direccion actual: %s\n",
+                flow_type_to_string(flowPolicy.type),
+                flow_decision_to_string(flowPolicy.direction)
+            );
         }
 
-        bool fixedFinished =
-            !dynamicGenerationEnabled &&
-            queue_is_empty(&leftQueue) &&
-            queue_is_empty(&rightQueue) &&
-            canal_is_empty(&demoCanal);
+        /*
+         * 1. Intentar meter barco antes del movimiento.
+         */
+        try_release_one_ship_to_canal(&rrIndexLeft, &rrIndexRight);
 
-        give_queues();
-
+        /*
+         * 2. Mover barcos dentro del canal.
+         * Cada ShipTask suma credito de subtick e intenta maximo 1 paso.
+         */
         notify_ships_and_render();
 
-        if (fixedFinished)
+        /*
+         * 3. Intentar meter otro barco después del movimiento.
+         * Esto evita espacios artificiales con pesqueros y patrullas.
+         */
+        try_release_one_ship_to_canal(&rrIndexLeft, &rrIndexRight);
+
+        /*
+         * 4. Render final del subtick.
+         */
+        render_outputs();
+
+        if (fixed_simulation_finished())
         {
             printf("\nNo quedan barcos en colas ni en canal. Simulacion fija finalizada.\n");
             break;
         }
 
-        vTaskDelay(pdMS_TO_TICKS(config.tickMs));
+        vTaskDelay(pdMS_TO_TICKS(MOVEMENT_SUBTICK_MS));
     }
 
     systemRunning = false;
@@ -936,72 +821,62 @@ static void ship_task_entry(void *params)
 
             if (shipTask->justEntered)
             {
+                /*
+                 * Al entrar al canal, no le damos un movimiento completo.
+                 * Solo reiniciamos el crédito para que empiece a acumular
+                 * de forma normal con los subticks.
+                 */
                 shipTask->justEntered = false;
-
-                shipTask->moveCredit += shipTask->effectiveSpeed;
+                shipTask->moveCredit = 0.0f;
 
                 printf(
-                    "[%s] Primer tick tras entrada, sin movimiento\n",
-                    shipTask->taskName);
-
-                continue;
+                    "[%s] Primer subtick tras entrada | Posicion: %d\n",
+                    shipTask->taskName,
+                    shipTask->ship.position
+                );
             }
 
-            shipTask->moveCredit += shipTask->effectiveSpeed;
+            /*
+             * En subticks NO se suma effectiveSpeed completo.
+             * Se suma solo la fracción correspondiente al intervalo del subtick.
+             */
+            float creditIncrement =
+                shipTask->effectiveSpeed *
+                ((float)MOVEMENT_SUBTICK_MS / 1000.0f);
+
+            shipTask->moveCredit += creditIncrement;
 
             bool movedAtLeastOnce = false;
             bool blocked = false;
 
             /*
-             * Cantidad máxima de pasos unitarios que puede intentar este barco
-             * en este tick según su crédito acumulado.
+             * En subtick, intenta como máximo 1 paso unitario.
+             * Así nunca se ve como salto.
              */
-            int stepsThisTick = (int)shipTask->moveCredit;
-
-            if (stepsThisTick < 1)
-            {
-                stepsThisTick = 0;
-            }
-
-            int substepDelayMs = get_substep_delay_ms(shipTask, stepsThisTick);
-
-            while (
+            if (
                 shipTask->moveCredit >= 1.0f &&
                 shipTask->ship.state != FINISHED &&
-                systemRunning)
-            {
+                systemRunning
+            ) {
                 bool moved = canal_move_one_step(&demoCanal, shipTask);
 
-                if (moved)
-                {
+                if (moved) {
                     movedAtLeastOnce = true;
                     shipTask->moveCredit -= 1.0f;
-
-                    render_outputs();
-
-                    /*
-                     * Divide el tick entre los pasos del barco.
-                     * Ej:
-                     * speed 2 -> 500 ms
-                     * speed 3 -> 333 ms
-                     */
-                    vTaskDelay(pdMS_TO_TICKS(substepDelayMs));
-                }
-                else
-                {
+                } else {
                     blocked = true;
                     shipTask->moveCredit = 0.0f;
-                    break;
                 }
             }
 
-            if (!movedAtLeastOnce && !blocked && shipTask->moveCredit < 1.0f)
-            {
+            if (!movedAtLeastOnce && !blocked && shipTask->moveCredit < 1.0f) {
                 printf(
-                    "[%s] Acumulando credito | Credito: %.2f | Velocidad efectiva: %.2f\n",
+                    "[%s] Acumulando credito | Credito: %.2f | Incremento: %.2f | Velocidad efectiva: %.2f\n",
                     shipTask->taskName,
                     shipTask->moveCredit,
-                    shipTask->effectiveSpeed);
+                    creditIncrement,
+                    shipTask->effectiveSpeed
+                );
             }
         }
 
@@ -1297,7 +1172,7 @@ static void give_queues(void)
     xSemaphoreGive(queuesSemaphore);
 }
 
-#define MOVEMENT_SETTLE_MS 100
+#define MOVEMENT_SETTLE_MS 20
 
 static void notify_ships_and_render(void)
 {
@@ -1313,19 +1188,110 @@ static void notify_ships_and_render(void)
     render_outputs();
 }
 
-static int get_substep_delay_ms(ShipTask *shipTask, int stepsThisTick)
+static bool try_release_one_ship_to_canal(int *rrIndexLeft, int *rrIndexRight)
 {
-    if (shipTask == NULL || stepsThisTick <= 0)
-    {
-        return config.tickMs;
+    if (is_proximity_safety_active()) {
+        return false;
     }
 
-    int delayMs = config.tickMs / stepsThisTick;
-
-    if (delayMs < 50)
-    {
-        delayMs = 50;
+    if (!take_queues()) {
+        return false;
     }
 
-    return delayMs;
+    FLOWDECISION decision = flow_policy_select_side(
+        &flowPolicy,
+        &leftQueue,
+        &rightQueue
+    );
+
+    ReadyQueue *selectedQueue = NULL;
+    FLOWDECISION releasedSide = FLOW_NONE;
+
+    if (decision == FLOW_LEFT) {
+        selectedQueue = &leftQueue;
+        releasedSide = FLOW_LEFT;
+    } else if (decision == FLOW_RIGHT) {
+        selectedQueue = &rightQueue;
+        releasedSide = FLOW_RIGHT;
+    }
+
+    if (selectedQueue == NULL || queue_is_empty(selectedQueue)) {
+        give_queues();
+        return false;
+    }
+
+    int selectedIndex = -1;
+
+    if (config.schedulerType == SCHED_RR) {
+        if (releasedSide == FLOW_LEFT) {
+            selectedIndex = scheduler_rr(selectedQueue, config.rrQuantum, rrIndexLeft);
+        } else {
+            selectedIndex = scheduler_rr(selectedQueue, config.rrQuantum, rrIndexRight);
+        }
+    } else {
+        selectedIndex = select_scheduler_index(config.schedulerType, selectedQueue);
+    }
+
+    if (selectedIndex < 0) {
+        give_queues();
+        return false;
+    }
+
+    ShipTask *selectedTask = queue_get(selectedQueue, selectedIndex);
+
+    if (selectedTask == NULL) {
+        give_queues();
+        return false;
+    }
+
+    bool entered = false;
+
+    if (selectedTask->hasCheckpoint) {
+        entered = canal_enter_at(&demoCanal, selectedTask, selectedTask->savedPosition);
+
+        if (entered) {
+            selectedTask->moveCredit = selectedTask->savedMoveCredit;
+            selectedTask->hasCheckpoint = false;
+            selectedTask->savedPosition = 0;
+            selectedTask->savedMoveCredit = 0.0f;
+        }
+    } else {
+        entered = canal_enter(&demoCanal, selectedTask);
+    }
+
+    if (entered) {
+        printf(
+            "Barco %d entro exitosamente desde %s\n",
+            selectedTask->ship.id,
+            flow_decision_to_string(releasedSide)
+        );
+
+        selectedTask->justEntered = true;
+
+        queue_remove(selectedQueue, selectedIndex);
+        flow_policy_on_ship_released(&flowPolicy, releasedSide);
+    }
+
+    give_queues();
+
+    return entered;
+}
+
+static bool fixed_simulation_finished(void)
+{
+    bool finished = false;
+
+    if (!take_queues()) {
+        return false;
+    }
+
+    finished =
+        !dynamicGenerationEnabled &&
+        queue_is_empty(&leftQueue) &&
+        queue_is_empty(&rightQueue) &&
+        canal_is_empty(&demoCanal);
+
+    give_queues();
+
+    return finished;
 }
