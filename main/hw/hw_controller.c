@@ -9,31 +9,38 @@
 static bool hardwareInitialized = false;
 static bool hardwareEnabled = true;
 
-bool hardware_init(void) {
+bool hardware_init(void)
+{
     bool ok = true;
 
     printf("Inicializando hardware...\n");
 
-    if (!led_strips_init()) {
+    if (!led_strips_init())
+    {
         printf("ERROR: No se pudieron inicializar las tiras LED\n");
         ok = false;
     }
 
-    if (!direction_leds_init()) {
+    if (!direction_leds_init())
+    {
         printf("ERROR: No se pudieron inicializar los LEDs de direccion\n");
         ok = false;
     }
 
-    if (!proximity_sensor_init()) {
+    if (!proximity_sensor_init())
+    {
         printf("ERROR: No se pudo inicializar el sensor de proximidad\n");
         ok = false;
     }
 
     hardwareInitialized = ok;
 
-    if (hardwareInitialized) {
+    if (hardwareInitialized)
+    {
         printf("Hardware inicializado correctamente\n");
-    } else {
+    }
+    else
+    {
         printf("Hardware inicializado con errores\n");
     }
 
@@ -44,17 +51,20 @@ void hardware_render_state(
     ReadyQueue *leftQueue,
     ReadyQueue *rightQueue,
     Canal *canal,
-    FlowPolicy *flowPolicy
-) {
-    if (!hardwareEnabled) {
+    FlowPolicy *flowPolicy)
+{
+    if (!hardwareEnabled)
+    {
         return;
     }
 
-    if (!hardwareInitialized) {
+    if (!hardwareInitialized)
+    {
         return;
     }
 
-    if (leftQueue == NULL || rightQueue == NULL || canal == NULL || flowPolicy == NULL) {
+    if (leftQueue == NULL || rightQueue == NULL || canal == NULL || flowPolicy == NULL)
+    {
         return;
     }
 
@@ -75,48 +85,74 @@ void hardware_render_state(
     direction_leds_set(flowPolicy->direction);
 }
 
-bool hardware_interrupt_triggered(void) {
-    if (!hardwareEnabled) {
+bool hardware_interrupt_triggered(void)
+{
+    if (!hardwareEnabled)
+    {
         return false;
     }
 
-    if (!hardwareInitialized) {
+    if (!hardwareInitialized)
+    {
         return false;
     }
 
     return proximity_sensor_was_triggered();
 }
 
-void hardware_clear_interrupt(void) {
-    if (!hardwareEnabled) {
+bool hardware_sensor_active(void)
+{
+    if (!hardwareEnabled)
+    {
+        return false;
+    }
+
+    if (!hardwareInitialized)
+    {
+        return false;
+    }
+
+    return proximity_sensor_is_active();
+}
+
+void hardware_clear_interrupt(void)
+{
+    if (!hardwareEnabled)
+    {
         return;
     }
 
-    if (!hardwareInitialized) {
+    if (!hardwareInitialized)
+    {
         return;
     }
 
     proximity_sensor_clear_trigger();
 }
 
-void hardware_set_enabled(bool enabled) {
+void hardware_set_enabled(bool enabled)
+{
     hardwareEnabled = enabled;
 }
 
-bool hardware_init_canal_only(void) {
+bool hardware_init_canal_only(void)
+{
     bool ok = led_strips_init_canal_only();
 
     hardwareInitialized = ok;
 
-    if (ok) {
+    if (ok)
+    {
         printf("Solo tira LED del canal inicializada correctamente\n");
     }
 
     return ok;
 }
 
-void hardware_render_canal_only(Canal *canal) {
-    if (!hardwareEnabled || !hardwareInitialized || canal == NULL) {
+void hardware_render_canal_only(Canal *canal)
+{
+    if (!hardwareEnabled || !hardwareInitialized || canal == NULL)
+    {
         return;
     }
 

@@ -20,10 +20,11 @@ void hardware_render_state(
     ReadyQueue *leftQueue,
     ReadyQueue *rightQueue,
     Canal *canal,
-    FlowPolicy *flowPolicy
-);
+    FlowPolicy *flowPolicy);
 
 bool hardware_interrupt_triggered(void);
+
+bool hardware_sensor_active(void);
 
 void hardware_clear_interrupt(void);
 
@@ -33,4 +34,4 @@ bool hardware_init_canal_only(void);
 
 void hardware_render_canal_only(Canal *canal);
 
-#endif //HW_CONTROLLER_H
+#endif // HW_CONTROLLER_H
