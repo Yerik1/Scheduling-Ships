@@ -895,7 +895,8 @@ static void ship_task_entry(void *params)
                 shipTask->ship.position);
         }
 
-        bool firstMovementAfterEntry = true;
+        bool firstMovementAfterEntry = !shipTask->hasEnteredBefore;
+        shipTask->hasEnteredBefore = true;
 
         while (systemRunning && shipTask->ship.state != FINISHED)
         {
