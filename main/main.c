@@ -598,6 +598,8 @@ static void simulation_task(void *params)
     {
         tick++;
 
+        proximity_sensor_trigger_ping();
+
         printf("\n---------- TICK %d ----------\n", tick);
 
         if (hardware_sensor_active() && !is_proximity_safety_active())
