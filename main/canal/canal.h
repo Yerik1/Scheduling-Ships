@@ -38,5 +38,6 @@ bool canal_move_one_step(Canal *canal, ShipTask *task);
 void canal_notify_ships(Canal *canal);
 void canal_notify_ships_ordered(Canal *canal);
 void canal_set_ship_position(Canal *canal, ShipTask *task, int position);
+bool canal_enter_at(Canal *canal, ShipTask *task, int position);
 
 #endif // CANAL_H

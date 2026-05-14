@@ -988,3 +988,87 @@ void canal_set_ship_position(Canal *canal, ShipTask *task, int position)
         }
     }
 }
+
+bool canal_enter_at(Canal *canal, ShipTask *task, int position)
+{
+    if (canal == NULL || task == NULL)
+        return false;
+
+    if (position < 0 || position >= canal->length)
+        return false;
+
+    if (!take_state_semaphore(canal))
+        return false;
+
+    if (!take_position_semaphore(canal, position))
+    {
+        give_state_semaphore(canal);
+        return false;
+    }
+
+    bool result = false;
+
+    if (!canal->isBlocked && canal->ships_inside.tasks[position] == NULL)
+    {
+        result = canal_add_task_at(canal, task, position);
+
+        if (result)
+        {
+            canal->current_direction = task->ship.origin;
+            task->ship.position = position;
+            setState(&task->ship, RUNNING);
+
+            printf(
+                "Barco %d re-ingreso al canal en checkpoint posicion %d\n",
+                task->ship.id,
+                position);
+        }
+    }
+    else
+    {
+        // Posición ocupada: buscar celda libre más cercana hacia el origen
+        int step = (task->ship.origin == LEFT) ? -1 : 1;
+
+        give_position_semaphore(canal, position);
+
+        for (int offset = 1; offset < canal->length; offset++)
+        {
+            int fallback = position + (step * offset);
+
+            if (fallback < 0 || fallback >= canal->length)
+                break;
+
+            if (!take_position_semaphore(canal, fallback))
+                continue;
+
+            if (!canal->isBlocked && canal->ships_inside.tasks[fallback] == NULL)
+            {
+                result = canal_add_task_at(canal, task, fallback);
+
+                if (result)
+                {
+                    canal->current_direction = task->ship.origin;
+                    task->ship.position = fallback;
+                    setState(&task->ship, RUNNING);
+
+                    printf(
+                        "WARN: checkpoint %d ocupado, barco %d re-ingreso en %d\n",
+                        position, task->ship.id, fallback);
+                }
+
+                give_position_semaphore(canal, fallback);
+                break;
+            }
+
+            give_position_semaphore(canal, fallback);
+        }
+
+        give_state_semaphore(canal);
+        return result;
+    }
+
+    give_position_semaphore(canal, position);
+    give_state_semaphore(canal);
+
+    return result;
+}

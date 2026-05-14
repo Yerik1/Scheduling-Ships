@@ -727,7 +727,25 @@ static void simulation_task(void *params)
             direction_to_string(selectedTask->ship.origin),
             selectedTask->ship.position);
 
-        if (canal_enter(&demoCanal, selectedTask))
+        bool entered = false;
+
+        if (selectedTask->hasCheckpoint)
+        {
+            // Re-ingreso tras interrupción: volver a la posición guardada
+            entered = canal_enter_at(&demoCanal, selectedTask, selectedTask->savedPosition);
+
+            if (entered)
+            {
+                selectedTask->hasCheckpoint = false;
+                selectedTask->savedPosition = 0;
+            }
+        }
+        else
+        {
+            entered = canal_enter(&demoCanal, selectedTask);
+        }
+
+        if (entered)
         {
             printf(
                 "Barco %d entro exitosamente desde %s\n",
@@ -864,12 +882,8 @@ static void ship_task_entry(void *params)
         if (shipTask->hasCheckpoint)
         {
             printf(
-                "[%s] Reanudando desde checkpoint | Posicion guardada: %d\n",
-                shipTask->taskName,
-                shipTask->savedPosition);
-
-            canal_set_ship_position(&demoCanal, shipTask, shipTask->savedPosition);
-
+                "[%s] WARN: hasCheckpoint en TRUE al despertar (no deberia ocurrir)\n",
+                shipTask->taskName);
             shipTask->hasCheckpoint = false;
             shipTask->savedPosition = 0;
         }
