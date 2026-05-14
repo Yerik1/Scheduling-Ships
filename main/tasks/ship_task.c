@@ -93,6 +93,7 @@ BaseType_t createShipTaskWithConfig(
     shipTask->handle = NULL;
     shipTask->maxSteps = maxSteps;
     shipTask->hasEnteredBefore = false;
+    shipTask->justEntered = false;
 
     snprintf(
         shipTask->taskName,

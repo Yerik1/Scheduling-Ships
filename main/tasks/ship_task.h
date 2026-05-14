@@ -27,6 +27,7 @@ typedef struct ShipTask
     int savedPosition;
     bool hasCheckpoint;
     bool hasEnteredBefore;
+    bool justEntered;
 } ShipTask;
 
 BaseType_t createShipTask(struct Ship ship);

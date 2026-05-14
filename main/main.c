@@ -752,6 +752,8 @@ static void simulation_task(void *params)
                 selectedTask->ship.id,
                 flow_decision_to_string(releasedSide));
 
+            selectedTask->justEntered = true;
+
             queue_remove(selectedQueue, selectedIndex);
             flow_policy_on_ship_released(&flowPolicy, releasedSide);
         }
@@ -926,6 +928,15 @@ static void ship_task_entry(void *params)
 
             if (shipTask->ship.state != RUNNING)
             {
+                continue;
+            }
+
+            if (shipTask->justEntered)
+            {
+                shipTask->justEntered = false;
+                printf(
+                    "[%s] Primer tick tras entrada, sin movimiento\n",
+                    shipTask->taskName);
                 continue;
             }
 
