@@ -527,6 +527,7 @@ static void handle_proximity_interrupt(void)
 
                 // Save Ship Position
                 task->savedPosition = task->ship.position;
+                task->savedMoveCredit = task->moveCredit;
                 task->hasCheckpoint = true;
 
                 task->ship.state = READY;
@@ -736,8 +737,10 @@ static void simulation_task(void *params)
 
             if (entered)
             {
+                selectedTask->moveCredit = selectedTask->savedMoveCredit;
                 selectedTask->hasCheckpoint = false;
                 selectedTask->savedPosition = 0;
+                selectedTask->savedMoveCredit = 0.0f;
             }
         }
         else

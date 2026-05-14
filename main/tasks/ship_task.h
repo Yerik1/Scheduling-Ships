@@ -25,6 +25,7 @@ typedef struct ShipTask
     float effectiveSpeed;
     float moveCredit;
     int savedPosition;
+    float savedMoveCredit;
     bool hasCheckpoint;
     bool hasEnteredBefore;
     bool justEntered;
