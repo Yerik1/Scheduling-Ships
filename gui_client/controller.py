@@ -1,9 +1,7 @@
 import serial
-import random
 import platform
 import os
 import json
-import tkinter as tk
 import time
 from model import CanalModelo
 from ConfigView import ConfigView
@@ -102,6 +100,8 @@ class CanalController:
                 f"CFG_SIGN:{config['signInterval']}",
                 f"CFG_RR:{config['rrQuantum']}",
                 f"CFG_MODE:{config.get('generationMode', 'Fijo')}",
+                f"CFG_BURST:{config['burstTime']}",
+                f"CFG_DEADLINE:{config['deadline']}",
             ]
 
             for cmd in comandos:

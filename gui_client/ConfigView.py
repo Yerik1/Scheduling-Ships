@@ -18,6 +18,7 @@ class ConfigView:
         frame_general.pack(pady=10, fill=tk.X)
         self.widgets.append(frame_general)
 
+        # --- CAMPOS EXISTENTES ---
         tk.Label(frame_general, text="Largo del Canal (unidades):", bg="lightblue", font=("Arial", 10, "bold")).grid(row=0, column=0, sticky=tk.W, pady=5)
         self.entry_largo = tk.Entry(frame_general, width=10)
         self.entry_largo.insert(0, "6")
@@ -31,7 +32,7 @@ class ConfigView:
         self.widgets.append(self.entry_queue_size)
 
         tk.Label(frame_general, text="Algoritmo de Scheduling:", bg="lightblue", font=("Arial", 10, "bold")).grid(row=2, column=0, sticky=tk.W, pady=5)
-        self.combo_algo = ttk.Combobox(frame_general, values=["FCFS", "SJF", "Round Robin", "Priority"], width=15)
+        self.combo_algo = ttk.Combobox(frame_general, values=["FCFS", "SJF", "Round Robin", "Priority", "STRN", "EDF"], width=15)
         self.combo_algo.current(0)
         self.combo_algo.grid(row=2, column=1, pady=5)
         self.combo_algo.bind('<<ComboboxSelected>>', self._update_fields)
@@ -61,23 +62,42 @@ class ConfigView:
         self.combo_modo.grid(row=4, column=1, pady=5)
         self.widgets.append(self.combo_modo)
 
+        # --- CAMPOS DINÁMICOS ---
+        
+        # Fairness W (Equidad)
         tk.Label(frame_general, text="Fairness W:", bg="lightblue", font=("Arial", 10, "bold")).grid(row=5, column=0, sticky=tk.W, pady=5)
         self.entry_fairness_w = tk.Entry(frame_general, width=10)
         self.entry_fairness_w.insert(0, "1")
         self.entry_fairness_w.grid(row=5, column=1, pady=5)
         self.widgets.append(self.entry_fairness_w)
 
+        # Sign Interval (Letrero)
         tk.Label(frame_general, text="Sign Interval (ms):", bg="lightblue", font=("Arial", 10, "bold")).grid(row=6, column=0, sticky=tk.W, pady=5)
         self.entry_sign_interval = tk.Entry(frame_general, width=10)
         self.entry_sign_interval.insert(0, "1000")
         self.entry_sign_interval.grid(row=6, column=1, pady=5)
         self.widgets.append(self.entry_sign_interval)
 
+        # RR Quantum (Round Robin)
         tk.Label(frame_general, text="RR Quantum:", bg="lightblue", font=("Arial", 10, "bold")).grid(row=7, column=0, sticky=tk.W, pady=5)
         self.entry_rr_quantum = tk.Entry(frame_general, width=10)
         self.entry_rr_quantum.insert(0, "10")
         self.entry_rr_quantum.grid(row=7, column=1, pady=5)
         self.widgets.append(self.entry_rr_quantum)
+
+        # Burst Time (STRN / SJF)
+        tk.Label(frame_general, text="Tiempo de Cruce (s):", bg="lightblue", font=("Arial", 10, "bold")).grid(row=8, column=0, sticky=tk.W, pady=5)
+        self.entry_burst_time = tk.Entry(frame_general, width=10)
+        self.entry_burst_time.insert(0, "5") # Valor por defecto
+        self.entry_burst_time.grid(row=8, column=1, pady=5)
+        self.widgets.append(self.entry_burst_time)
+
+        # Deadline (EDF)
+        tk.Label(frame_general, text="Plazo Máximo (Deadline):", bg="lightblue", font=("Arial", 10, "bold")).grid(row=9, column=0, sticky=tk.W, pady=5)
+        self.entry_deadline = tk.Entry(frame_general, width=10)
+        self.entry_deadline.insert(0, "20") # Valor por defecto
+        self.entry_deadline.grid(row=9, column=1, pady=5)
+        self.widgets.append(self.entry_deadline)
 
         # Frame para barcos iniciales
         frame_barcos = tk.Frame(parent, bg="lightgreen", padx=20, pady=10)
@@ -152,22 +172,32 @@ class ConfigView:
         scheduler = self.combo_algo.get()
         flow = self.combo_flujo.get()
         
-        # Por defecto, habilitar todos
-        self.entry_fairness_w.config(state='normal')
-        self.entry_sign_interval.config(state='normal')
-        self.entry_rr_quantum.config(state='normal')
+        # Reset de estados (Habilitar todo primero)
+        fields = [self.entry_fairness_w, self.entry_sign_interval, self.entry_rr_quantum, 
+                  self.entry_burst_time, self.entry_deadline]
+        
+        for f in fields:
+            f.config(state='normal', bg="white")
 
-        # Si scheduler no es Round Robin, deshabilitar Quantum
+        # Lógica de deshabilitación visual
         if scheduler != "Round Robin":
-            self.entry_rr_quantum.config(state='disabled')
+            self._disable_entry(self.entry_rr_quantum)
         
-        # Si flow es Letrero, W
+        if scheduler != "STRN":
+            self._disable_entry(self.entry_burst_time)
+            
+        if scheduler != "EDF":
+            self._disable_entry(self.entry_deadline)
+        
         if flow == "Letrero":
-            self.entry_fairness_w.config(state='disabled')
+            self._disable_entry(self.entry_sign_interval)
         
-        # Si flow es Equidad, Sign Interval
         if flow == "Equidad":
-            self.entry_sign_interval.config(state='disabled')
+            self._disable_entry(self.entry_fairness_w)
+    
+    def _disable_entry(self, entry):
+        """Helper para deshabilitar y cambiar color visualmente"""
+        entry.config(state='disabled', disabledbackground="#e0e0e0")
 
     def enviar_datos(self):
         scheduler = self.combo_algo.get()
@@ -236,7 +266,9 @@ class ConfigView:
             },
             "fairnessW": int(self.entry_fairness_w.get()) if flow == "Equidad" else 0,
             "signInterval": int(self.entry_sign_interval.get()) if flow == "Letrero" else 0,
-            "rrQuantum": int(self.entry_rr_quantum.get()) if scheduler == "Round Robin" else 0
+            "rrQuantum": int(self.entry_rr_quantum.get()) if scheduler == "Round Robin" else 0,
+            "burstTime": int(self.entry_burst_time.get()) if scheduler == "SRTN" else 0,
+            "deadline": int(self.entry_deadline.get()) if scheduler == "EDF" else 0,
         }
         self.callback_iniciar(config)
 
