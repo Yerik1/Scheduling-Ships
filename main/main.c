@@ -937,9 +937,13 @@ static void ship_task_entry(void *params)
             if (shipTask->justEntered)
             {
                 shipTask->justEntered = false;
+
+                shipTask->moveCredit += shipTask->effectiveSpeed;
+
                 printf(
                     "[%s] Primer tick tras entrada, sin movimiento\n",
                     shipTask->taskName);
+
                 continue;
             }
 
