@@ -1,61 +1,64 @@
-//
-// Created by user on 4/27/2026.
-//
-
 #include "ship_factory.h"
-static int contador = 0;
 
-struct Ship createShip(ShipType shipType, Direction direction, int canalLength) {
-    int id = contador;
-    contador++;
-    ShipState shipState = READY;
-    Direction origin;
-    Direction destination;
+// File-scoped static counter to generate unique sequential IDs
+static int ship_counter = 0;
+
+/* ========================================================================== */
+/* FACTORY CREATION FUNCTIONS                                                 */
+/* ========================================================================== */
+
+Ship ship_factory_create(ShipType ship_type, Direction direction, int canal_length)
+{
+    int id = ship_counter++;
+    ShipState ship_state = READY;
+    int position = 0;
+
     int speed;
     int priority;
-    int position = 0;
-    int burstTime;
-    int remainingTime;
-    int deadline;
 
-    if (direction == LEFT) {
-        origin = LEFT;
-        destination = RIGHT;
-    }else {
-        origin = RIGHT;
-        destination = LEFT;
-    }
-    if (shipType == NORMAL) {
+    // Set directional vectors based on the entry direction
+    Direction origin = (direction == LEFT) ? LEFT : RIGHT;
+    Direction destination = (direction == LEFT) ? RIGHT : LEFT;
+
+    // Configure ship metrics based on its specific type
+    switch (ship_type)
+    {
+    case NORMAL:
         speed = 1;
         priority = 3;
-    }else if (shipType == FISHING) {
+        break;
+    case FISHING:
         speed = 2;
         priority = 2;
-    }else{
+        break;
+    default: // e.g., PATROL or other types
         speed = 3;
         priority = 1;
+        break;
     }
 
-    burstTime = (canalLength + speed - 1) / speed;
-    remainingTime = burstTime;
-    deadline = burstTime * priority;
+    // Ceiling division formula to calculate exact ticks needed to clear the canal:
+    // burst_time = ceil(canal_length / speed)
+    int burst_time = (canal_length + speed - 1) / speed;
+    int remaining_time = burst_time;
+    int deadline = burst_time * priority;
 
-    return initShip(id, shipType, origin, destination, shipState, priority,
-        burstTime, remainingTime, deadline, speed,position);
+    return ship_init(id, ship_type, origin, destination, ship_state, priority,
+                     burst_time, remaining_time, deadline, speed, position);
 }
 
-struct Ship createRndmShip(int canalLength) {
-    srand(time(NULL));
-    Direction dir = rand() % (RIGHT + 1);
-    srand(time(NULL));
-    ShipType type = rand() % (PATROL + 1);
+Ship ship_factory_create_random(int canal_length)
+{
+    // Note: Ensure srand() has been called once in main() before using this function
+    Direction random_dir = (Direction)(rand() % (RIGHT + 1));
+    ShipType random_type = (ShipType)(rand() % (PATROL + 1));
 
-    return createShip(type, dir, canalLength);
-
+    return ship_factory_create(random_type, random_dir, canal_length);
 }
 
-struct Ship createRndmShipWDir(Direction dir, int canalLength) {
-    ShipType type = rand() % (PATROL + 1);
+Ship ship_factory_create_random_with_dir(Direction dir, int canal_length)
+{
+    ShipType random_type = (ShipType)(rand() % (PATROL + 1));
 
-    return createShip(type, dir, canalLength);
+    return ship_factory_create(random_type, dir, canal_length);
 }
