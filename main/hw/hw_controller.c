@@ -8,6 +8,7 @@
 
 static bool hardwareInitialized = false;
 static bool hardwareEnabled = true;
+static int hwVisibleQueueSlots = 4;
 
 bool hardware_init(void)
 {
@@ -71,8 +72,8 @@ void hardware_render_state(
     /*
      * Representa las colas laterales.
      */
-    led_strips_render_left_queue(leftQueue);
-    led_strips_render_right_queue(rightQueue);
+    led_strips_render_left_queue(leftQueue, hwVisibleQueueSlots);
+    led_strips_render_right_queue(rightQueue, hwVisibleQueueSlots);
 
     /*
      * Representa las posiciones ocupadas dentro del canal.
@@ -82,7 +83,11 @@ void hardware_render_state(
     /*
      * Representa la direccion actual del flujo/letrero.
      */
-    direction_leds_set(flowPolicy->direction);
+    if (canal != NULL && canal->isBlocked) {
+        direction_leds_clear();
+    } else {
+        direction_leds_set(flowPolicy->direction);
+    }
 }
 
 bool hardware_interrupt_triggered(void)
@@ -157,4 +162,19 @@ void hardware_render_canal_only(Canal *canal)
     }
 
     led_strips_render_canal(canal);
+}
+
+void hardware_set_visible_queue_slots(int visibleSlots)
+{
+    if (visibleSlots < 1)
+    {
+        visibleSlots = 1;
+    }
+
+    if (visibleSlots > 4)
+    {
+        visibleSlots = 4;
+    }
+
+    hwVisibleQueueSlots = visibleSlots;
 }

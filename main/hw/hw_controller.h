@@ -34,4 +34,6 @@ bool hardware_init_canal_only(void);
 
 void hardware_render_canal_only(Canal *canal);
 
+void hardware_set_visible_queue_slots(int visibleSlots);
+
 #endif // HW_CONTROLLER_H

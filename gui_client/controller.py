@@ -23,6 +23,7 @@ class CanalController:
         self.barco_pos = 0
         self.flow_type = "Equidad"  # default
         self.config_view = None
+        self.visible_queue_slots = 4
 
         # Intentar cargar configuración desde canal.config
         config_file = "canal.config"
@@ -48,6 +49,8 @@ class CanalController:
         self.queue_size = config["queueSize"]
         self.flow_type = config["flowType"]
         self.generation_mode = config.get("generationMode", "Fijo")
+        self.visible_queue_slots = config["visibleQueueSlots"]
+        self.modelo.visible_queue_slots = config["visibleQueueSlots"]
 
         # Generar barcos iniciales
         izq_ids = []
@@ -100,8 +103,7 @@ class CanalController:
                 f"CFG_SIGN:{config['signInterval']}",
                 f"CFG_RR:{config['rrQuantum']}",
                 f"CFG_MODE:{config.get('generationMode', 'Fijo')}",
-                f"CFG_BURST:{config['burstTime']}",
-                f"CFG_DEADLINE:{config['deadline']}",
+                f"CFG_VISIBLE:{config['visibleQueueSlots']}",
             ]
 
             for cmd in comandos:
