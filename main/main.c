@@ -17,6 +17,7 @@
 #include "hw_controller.h"
 #include "ui.h"
 #include "serial_comm.h"
+#include "esp_system.h"
 
 #define UI_LINE_BUFFER_SIZE 160
 #define SHIP_TASK_STACK_SIZE 4096
@@ -93,6 +94,10 @@ static void reorder_queue_by_scheduler_unlocked(ReadyQueue *queue);
 static void reorder_queues_by_scheduler_unlocked(void);
 static bool restore_interrupted_ships_to_canal(void);
 static void clear_interrupted_ships_buffer(void);
+static bool preempt_ship_to_ready_queue_unlocked(ShipTask *task, const char *reason);
+static void apply_preemptive_scheduler_unlocked(void);
+static bool rr_has_waiting_ship_same_origin(ShipTask *task);
+static bool scheduler_checkpoint_reentry_allowed(ShipTask *task);
 
 
 void app_main(void)
@@ -438,6 +443,8 @@ static bool create_ship_from_ui(char sideChar, char typeChar)
     ShipType type = ship_type_from_char(typeChar);
 
     ShipTask *shipTask = pvPortMalloc(sizeof(ShipTask));
+
+    shipTask->rrStepsUsed = 0;
 
     if (shipTask == NULL)
     {
@@ -815,6 +822,13 @@ static void simulation_task(void *params)
                 flow_decision_to_string(flowPolicy.direction));
         }
 
+        if (take_queues()) {
+            reorder_queues_by_scheduler_unlocked();
+            apply_preemptive_scheduler_unlocked();
+            give_queues();
+        }
+
+
         /*
          * 1. Intentar meter barco antes del movimiento.
          */
@@ -825,6 +839,14 @@ static void simulation_task(void *params)
          * Cada ShipTask suma credito de subtick e intenta maximo 1 paso.
          */
         notify_ships_and_render();
+
+        /*
+         * Después del movimiento, revisar si algún barco ya gastó su quantum.
+         */
+        if (take_queues()) {
+            apply_preemptive_scheduler_unlocked();
+            give_queues();
+        }
 
         /*
          * 3. Intentar meter otro barco después del movimiento.
@@ -901,9 +923,15 @@ static void command_task(void *params)
         }
         else if (strcmp(line, "STOP") == 0)
         {
-            printf("STOP recibido desde UI.\n");
+            printf("STOP recibido desde UI. Reiniciando sistema...\n");
+
+            serial_comm_write_line("ACK:STOP");
+
             systemRunning = false;
-            break;
+
+            vTaskDelay(pdMS_TO_TICKS(300));
+
+            esp_restart();
         }
         else
         {
@@ -1038,6 +1066,10 @@ static void ship_task_entry(void *params)
                 if (moved) {
                     movedAtLeastOnce = true;
                     shipTask->moveCredit -= 1.0f;
+
+                    if (config.schedulerType == SCHD_RR) {
+                        shipTask->rrStepsUsed++;
+                    }
                 } else {
                     blocked = true;
                     shipTask->moveCredit = 0.0f;
@@ -1045,13 +1077,13 @@ static void ship_task_entry(void *params)
             }
 
             if (!movedAtLeastOnce && !blocked && shipTask->moveCredit < 1.0f) {
-                printf(
+                /**printf(
                     "[%s] Acumulando credito | Credito: %.2f | Incremento: %.2f | Velocidad efectiva: %.2f\n",
                     shipTask->taskName,
                     shipTask->moveCredit,
                     creditIncrement,
                     shipTask->effectiveSpeed
-                );
+                );*/
             }
         }
 
@@ -1427,7 +1459,29 @@ static bool try_release_one_ship_to_canal(int *rrIndexLeft, int *rrIndexRight)
         return false;
     }
 
-    bool entered = canal_enter(&demoCanal, selectedTask);
+    bool reenteringCheckpoint = selectedTask->hasCheckpoint && selectedTask->preemptedByScheduler;
+    bool entered = false;
+
+    if (reenteringCheckpoint) {
+
+        /*
+         * En STRN/EDF, un barco expulsado no puede reingresar
+         * si todavía hay otro barco más urgente corriendo.
+         */
+        if (!scheduler_checkpoint_reentry_allowed(selectedTask)) {
+            give_queues();
+            return false;
+        }
+
+        entered = canal_enter_at(
+            &demoCanal,
+            selectedTask,
+            selectedTask->savedPosition
+        );
+
+    } else {
+        entered = canal_enter(&demoCanal, selectedTask);
+    }
 
     if (entered) {
         printf(
@@ -1436,7 +1490,29 @@ static bool try_release_one_ship_to_canal(int *rrIndexLeft, int *rrIndexRight)
             flow_decision_to_string(releasedSide)
         );
 
-        selectedTask->justEntered = true;
+        if (reenteringCheckpoint) {
+            selectedTask->moveCredit = selectedTask->savedMoveCredit;
+
+            selectedTask->hasCheckpoint = false;
+            selectedTask->preemptedByScheduler = false;
+            selectedTask->savedPosition = 0;
+            selectedTask->savedMoveCredit = 0.0f;
+
+            selectedTask->justEntered = false;
+            selectedTask->hasEnteredBefore = true;
+            selectedTask->schedulerRunTimeMs = 0;
+            selectedTask->rrStepsUsed = 0;
+
+            printf(
+                "Barco %d reingreso por checkpoint en posicion %d\n",
+                selectedTask->ship.id,
+                selectedTask->ship.position
+            );
+        } else {
+            selectedTask->justEntered = true;
+            selectedTask->schedulerRunTimeMs = 0;
+            selectedTask->rrStepsUsed = 0;
+        }
 
         queue_remove(selectedQueue, selectedIndex);
         flow_policy_on_ship_released(&flowPolicy, releasedSide);
@@ -1526,3 +1602,318 @@ static void reorder_queues_by_scheduler_unlocked(void)
     reorder_queue_by_scheduler_unlocked(&rightQueue);
 }
 
+static bool preempt_ship_to_ready_queue_unlocked(ShipTask *task, const char *reason)
+{
+    if (task == NULL) {
+        return false;
+    }
+
+    printf(
+        "PREEMPT [%s] Barco %d removido del canal | pos=%d | credit=%.2f | remaining=%d\n",
+        reason,
+        task->ship.id,
+        task->ship.position,
+        task->moveCredit,
+        task->ship.remainingTime
+    );
+
+    task->savedPosition = task->ship.position;
+    task->savedMoveCredit = task->moveCredit;
+    task->hasCheckpoint = true;
+    task->preemptedByScheduler = true;
+    task->schedulerRunTimeMs = 0;
+    task->rrStepsUsed = 0;
+
+    task->ship.state = READY;
+
+    ShipTask *removedTask = canal_remove_task(&demoCanal, task);
+
+    if (removedTask == NULL) {
+        printf("ERROR: no se pudo expulsar barco %d del canal\n", task->ship.id);
+        return false;
+    }
+
+    ReadyQueue *targetQueue =
+        removedTask->ship.origin == LEFT ? &leftQueue : &rightQueue;
+
+    if (targetQueue->count >= queueCapacity) {
+        printf(
+            "ERROR: cola %s llena al reencolar barco expulsado %d\n",
+            direction_to_string(removedTask->ship.origin),
+            removedTask->ship.id
+        );
+
+        return false;
+    }
+
+    if (!queue_add(targetQueue, removedTask)) {
+        printf("ERROR: no se pudo reencolar barco expulsado %d\n", removedTask->ship.id);
+        return false;
+    }
+
+    /*
+     * Despierta la ShipTask para que salga de su ciclo RUNNING
+     * y vuelva a esperar a ser admitida.
+     */
+    if (removedTask->handle != NULL) {
+        xTaskNotifyGive(removedTask->handle);
+    }
+
+    return true;
+}
+
+static bool ship_should_not_be_preempted(ShipTask *task)
+{
+    if (task == NULL) {
+        return true;
+    }
+
+    if (task->ship.state != RUNNING) {
+        return true;
+    }
+
+    if (task->ship.remainingTime <= 0) {
+        return true;
+    }
+
+    /*
+     * Si ya está en la última casilla antes de salir,
+     * no tiene sentido expulsarlo.
+     */
+    if (task->ship.origin == LEFT &&
+        task->ship.position >= demoCanal.length - 1) {
+        return true;
+        }
+
+    if (task->ship.origin == RIGHT &&
+        task->ship.position <= 0) {
+        return true;
+        }
+
+    return false;
+}
+
+static void apply_preemptive_scheduler_unlocked(void)
+{
+    if (config.schedulerType != SCHD_RR &&
+        config.schedulerType != SCHED_STRN &&
+        config.schedulerType != SCHED_EDF) {
+        return;
+        }
+
+    if (canal_is_empty(&demoCanal)) {
+        return;
+    }
+
+    if (config.schedulerType == SCHD_RR) {
+        ShipTask *tasks[PHYSICAL_CANAL_CELLS];
+        int count = 0;
+
+        for (int i = 0; i < demoCanal.length; i++) {
+            ShipTask *task = demoCanal.ships_inside.tasks[i];
+
+            if (task != NULL && count < PHYSICAL_CANAL_CELLS) {
+                tasks[count++] = task;
+            }
+        }
+
+        for (int i = 0; i < count; i++) {
+            ShipTask *task = tasks[i];
+
+            if (task == NULL || task->ship.state != RUNNING) {
+                continue;
+            }
+
+            if (ship_should_not_be_preempted(task)) {
+                continue;
+            }
+
+            if (task->rrStepsUsed >= config.rrQuantum) {
+
+                if (!rr_has_waiting_ship_same_origin(task)) {
+                    /*
+                     * Si no hay nadie esperando del mismo lado,
+                     * no tiene sentido expulsarlo para que reingrese él mismo.
+                     * Se deja acumulado el quantum; si luego llega otro barco,
+                     * podrá ser expulsado en el siguiente chequeo.
+                     */
+                    continue;
+                }
+
+                preempt_ship_to_ready_queue_unlocked(task, "RR quantum");
+            }
+        }
+
+        return;
+    }
+
+    /*
+     * STRN / EDF:
+     * comparan el mejor barco en cola contra barcos en canal.
+     * Para mantener seguridad, solo preemptamos barcos del mismo origen.
+     */
+    ReadyQueue *candidateQueues[2] = { &leftQueue, &rightQueue };
+
+    for (int q = 0; q < 2; q++) {
+        ReadyQueue *queue = candidateQueues[q];
+
+        if (queue == NULL || queue_is_empty(queue)) {
+            continue;
+        }
+
+        reorder_queue_by_scheduler_unlocked(queue);
+
+        ShipTask *candidate = queue_get(queue, 0);
+
+        if (candidate == NULL) {
+            continue;
+        }
+
+        ShipTask *worstRunning = NULL;
+
+        for (int i = 0; i < demoCanal.length; i++) {
+            ShipTask *running = demoCanal.ships_inside.tasks[i];
+
+            if (running == NULL || running->ship.state != RUNNING) {
+                continue;
+            }
+
+            /*
+             * No expulsamos barcos de sentido contrario aquí.
+             * Eso lo maneja el control de flujo y la seguridad del canal.
+             */
+            if (running->ship.origin != candidate->ship.origin) {
+                continue;
+            }
+
+            if (config.schedulerType == SCHED_STRN) {
+                if (candidate->ship.remainingTime < running->ship.remainingTime) {
+                    if (
+                        worstRunning == NULL ||
+                        running->ship.remainingTime > worstRunning->ship.remainingTime
+                    ) {
+                        worstRunning = running;
+                    }
+                }
+            }
+
+            if (config.schedulerType == SCHED_EDF) {
+                /*
+                 * Ajusta el nombre del campo si tu Ship usa otro.
+                 * Puede ser deadline, absoluteDeadline, maxTime, etc.
+                 */
+                if (candidate->ship.deadline < running->ship.deadline) {
+                    if (
+                        worstRunning == NULL ||
+                        running->ship.deadline > worstRunning->ship.deadline
+                    ) {
+                        worstRunning = running;
+                    }
+                }
+            }
+        }
+
+        if (worstRunning != NULL) {
+            if (config.schedulerType == SCHED_STRN) {
+                preempt_ship_to_ready_queue_unlocked(worstRunning, "SRTN menor remaining time");
+            } else if (config.schedulerType == SCHED_EDF) {
+                preempt_ship_to_ready_queue_unlocked(worstRunning, "EDF deadline mas urgente");
+            }
+        }
+    }
+}
+
+static bool rr_has_waiting_ship_same_origin(ShipTask *task)
+{
+    if (task == NULL) {
+        return false;
+    }
+
+    ReadyQueue *queue =
+        task->ship.origin == LEFT ? &leftQueue : &rightQueue;
+
+    if (queue == NULL) {
+        return false;
+    }
+
+    return !queue_is_empty(queue);
+}
+
+static bool scheduler_checkpoint_reentry_allowed(ShipTask *task)
+{
+    if (task == NULL) {
+        return false;
+    }
+
+    /*
+     * Si no viene de una expulsión del scheduler, no aplicamos esta restricción.
+     * Por ejemplo, entrada normal o checkpoint de otra causa.
+     */
+    if (!task->hasCheckpoint || !task->preemptedByScheduler) {
+        return true;
+    }
+
+    /*
+     * RR puede reingresar cuando el scheduler lo vuelva a seleccionar.
+     */
+    if (config.schedulerType == SCHD_RR) {
+        return true;
+    }
+
+    /*
+     * Para STRN y EDF, evitamos que un barco expulsado vuelva a entrar
+     * adelante de otro barco más urgente que ya está corriendo.
+     */
+    if (config.schedulerType != SCHED_STRN && config.schedulerType != SCHED_EDF) {
+        return true;
+    }
+
+    for (int i = 0; i < demoCanal.length; i++) {
+        ShipTask *running = demoCanal.ships_inside.tasks[i];
+
+        if (running == NULL) {
+            continue;
+        }
+
+        if (running->ship.state != RUNNING) {
+            continue;
+        }
+
+        if (running->ship.origin != task->ship.origin) {
+            continue;
+        }
+
+        if (config.schedulerType == SCHED_STRN) {
+            if (running->ship.remainingTime < task->ship.remainingTime) {
+                printf(
+                    "STRN: Barco %d espera checkpoint porque Barco %d tiene menor remainingTime (%d < %d)\n",
+                    task->ship.id,
+                    running->ship.id,
+                    running->ship.remainingTime,
+                    task->ship.remainingTime
+                );
+
+                return false;
+            }
+        }
+
+        if (config.schedulerType == SCHED_EDF) {
+            /*
+             * Ajusta 'deadline' si tu estructura Ship usa otro nombre.
+             */
+            if (running->ship.deadline < task->ship.deadline) {
+                printf(
+                    "EDF: Barco %d espera checkpoint porque Barco %d tiene deadline mas urgente (%d < %d)\n",
+                    task->ship.id,
+                    running->ship.id,
+                    running->ship.deadline,
+                    task->ship.deadline
+                );
+
+                return false;
+            }
+        }
+    }
+
+    return true;
+}

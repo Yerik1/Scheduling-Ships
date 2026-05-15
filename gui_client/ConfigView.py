@@ -76,24 +76,24 @@ class ConfigView:
         # --- CAMPOS DINÁMICOS ---
         
         # Fairness W (Equidad)
-        tk.Label(frame_general, text="Fairness W:", bg="lightblue", font=("Arial", 10, "bold")).grid(row=5, column=0, sticky=tk.W, pady=5)
+        tk.Label(frame_general, text="Fairness W:", bg="lightblue", font=("Arial", 10, "bold")).grid(row=6, column=0, sticky=tk.W, pady=5)
         self.entry_fairness_w = tk.Entry(frame_general, width=10)
         self.entry_fairness_w.insert(0, "1")
         self.entry_fairness_w.grid(row=6, column=1, pady=5)
         self.widgets.append(self.entry_fairness_w)
 
         # Sign Interval (Letrero)
-        tk.Label(frame_general, text="Sign Interval (ms):", bg="lightblue", font=("Arial", 10, "bold")).grid(row=6, column=0, sticky=tk.W, pady=5)
+        tk.Label(frame_general, text="Sign Interval (ms):", bg="lightblue", font=("Arial", 10, "bold")).grid(row=7, column=0, sticky=tk.W, pady=5)
         self.entry_sign_interval = tk.Entry(frame_general, width=10)
         self.entry_sign_interval.insert(0, "1000")
         self.entry_sign_interval.grid(row=7, column=1, pady=5)
         self.widgets.append(self.entry_sign_interval)
 
         # RR Quantum (Round Robin)
-        tk.Label(frame_general, text="RR Quantum:", bg="lightblue", font=("Arial", 10, "bold")).grid(row=7, column=0, sticky=tk.W, pady=5)
+        tk.Label(frame_general, text="RR Quantum:", bg="lightblue", font=("Arial", 10, "bold")).grid(row=8, column=0, sticky=tk.W, pady=5)
         self.entry_rr_quantum = tk.Entry(frame_general, width=10)
         self.entry_rr_quantum.insert(0, "10")
-        self.entry_rr_quantum.grid(row=7, column=1, pady=5)
+        self.entry_rr_quantum.grid(row=8, column=1, pady=5)
         self.widgets.append(self.entry_rr_quantum)
 
 

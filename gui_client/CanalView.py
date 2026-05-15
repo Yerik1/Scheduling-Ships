@@ -22,7 +22,7 @@ class CanalView:
         self.canvas.pack(pady=(0, 10))
         
         # Dibujar Canal
-        self.canal_rect = self.canvas.create_rectangle(250, 200, 750, 300, fill="deepskyblue", outline="blue", width=3)
+        self.canal_rect = self.canvas.create_rectangle(250, 200, 800, 300, fill="deepskyblue", outline="blue", width=3)
         self.canvas.create_text(500, 170, text="CANAL", font=("Arial", 14, "bold"), fill="navy")
         
         # Agujas en los extremos del canal (ocultas hasta activarse)
