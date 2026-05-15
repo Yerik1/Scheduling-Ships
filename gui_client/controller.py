@@ -6,6 +6,7 @@ import time
 from model import CanalModelo
 from ConfigView import ConfigView
 from CanalView import CanalView
+from serial.tools import list_ports
 
 CANAL_LENGTH_FIXED = 6
 UI_REFRESH_MS = 50
@@ -15,29 +16,20 @@ class CanalController:
         self.root = root
         self.root.title("Scheduling Ships - TEC")
         self.simulacion = False
-        self.modelo = CanalModelo(largo=100)
+        self.modelo = CanalModelo(largo=CANAL_LENGTH_FIXED)
         self.vista = None
         self.ser = None
         self.id_counter = 0
         self.sim_time = 0
         self.barco_pos = 0
-        self.flow_type = "Equidad"  # default
+        self.flow_type = "Equidad"
         self.config_view = None
         self.visible_queue_slots = 4
+        self.after_id = None
+        self.queue_size = 4
+        self.generation_mode = "Fijo"
 
-        # Intentar cargar configuración desde canal.config
-        config_file = "canal.config"
-        if os.path.exists(config_file):
-            try:
-                with open(config_file, 'r') as f:
-                    config = json.load(f)
-                self.iniciar_sistema(config)
-            except Exception as e:
-                print(f"Error cargando canal.config: {e}")
-                self.config_view = ConfigView(self.root, self.iniciar_sistema)
-        else:
-            # Mostrar la vista de configuración
-            self.config_view = ConfigView(self.root, self.iniciar_sistema)
+        self.mostrar_setup()
 
     def iniciar_sistema(self, config):
         # Destruir la vista de configuración
@@ -72,7 +64,8 @@ class CanalController:
 
         # Intentar conexión Serial
         try:
-            puerto = 'COM4' if platform.system() == 'Windows' else '/dev/ttyUSB0'
+            puerto = self.detectar_puerto_serial()
+            print(f"Puerto serial seleccionado: {puerto}")
             self.ser = serial.Serial(
                 puerto,
                 115200,
@@ -142,14 +135,16 @@ class CanalController:
             self.simulacion = True
             print(f"Iniciando en modo simulación. Error serial: {e}")
 
-
-        # Cargar la vista del canal
+        # Iniciar el loop único
         self.vista = CanalView(self.root, self.modelo)
+
         self.root.bind('<Key>', self._on_key_press)
         self.root.focus_set()
 
-        # Iniciar el loop único
         self.actualizar_loop()
+    def iniciar_loop(self):
+        if self.after_id is None:
+            self.actualizar_loop()
 
     def actualizar_loop(self):
         latest_state = None
@@ -180,7 +175,7 @@ class CanalController:
                 self.modelo.barcos_canal
             )
 
-        self.root.after(UI_REFRESH_MS, self.actualizar_loop)
+        self.after_id = self.root.after(UI_REFRESH_MS, self.actualizar_loop)
 
     def procesar_estado(self, data):
         try:
@@ -285,6 +280,9 @@ class CanalController:
 
         print(f"Generar barco -> lado={lado}, tipo={tipo}, comando={comando.strip()}")
 
+    def set_vista(self, vista):
+        self.vista = vista
+
     def _enviar_barcos_iniciales(self, config):
         import time
 
@@ -322,6 +320,7 @@ class CanalController:
 
     def _on_key_press(self, event):
         key = getattr(event, 'keysym', '').lower()
+
         if key == 'l':
             self.generar_barco('L')
         elif key == 'r':
@@ -403,6 +402,95 @@ class CanalController:
         return False
 
     def cerrar_programa(self, event=None):
-        if not self.simulacion and hasattr(self, 'ser'):
-            self.ser.close()
-        self.root.destroy()
+        self.detener_sistema()
+        self.mostrar_setup()
+
+    def detener_sistema(self):
+        self.detener_loop()
+
+        try:
+            if self.ser and self.ser.is_open and not self.simulacion:
+                self._send_line("STOP")
+
+                try:
+                    self._read_until_ack("ACK:STOP", timeout_s=2)
+                except Exception:
+                    pass
+
+                self.ser.close()
+
+        except Exception as e:
+            print(f"Error deteniendo sistema: {e}")
+
+        self.simulacion = True
+        self.ser = None
+        self.vista = None
+
+    def limpiar_pantalla(self):
+        for widget in self.root.winfo_children():
+            widget.destroy()
+
+        self.vista = None
+        self.config_view = None
+
+
+    def mostrar_setup(self):
+        self.detener_loop()
+
+        self.limpiar_pantalla()
+
+        self.modelo = CanalModelo(largo=CANAL_LENGTH_FIXED)
+        self.vista = None
+        self.ser = None
+        self.simulacion = False
+        self.id_counter = 0
+
+        self.config_view = ConfigView(
+            self.root,
+            self.iniciar_sistema
+        )
+
+        self.root.focus_set()
+
+    def detener_loop(self):
+        if self.after_id is not None:
+            try:
+                self.root.after_cancel(self.after_id)
+            except Exception:
+                pass
+
+            self.after_id = None
+
+    def detectar_puerto_serial(self):
+        env_port = os.environ.get("ESP_PORT")
+
+        if env_port:
+            return env_port
+
+        if platform.system() == "Windows":
+            return "COM4"
+
+        puertos = list(list_ports.comports())
+
+        if not puertos:
+            return "/dev/ttyACM0"
+
+        candidatos = []
+
+        for p in puertos:
+            texto = f"{p.device} {p.description} {p.manufacturer}".lower()
+
+            if (
+                    "usb" in texto
+                    or "uart" in texto
+                    or "cp210" in texto
+                    or "ch340" in texto
+                    or "esp" in texto
+                    or "acm" in texto
+            ):
+                candidatos.append(p.device)
+
+        if candidatos:
+            return candidatos[0]
+
+        return puertos[0].device

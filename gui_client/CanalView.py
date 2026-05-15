@@ -22,12 +22,12 @@ class CanalView:
         self.canvas.pack(pady=(0, 10))
         
         # Dibujar Canal
-        self.canal_rect = self.canvas.create_rectangle(250, 200, 750, 300, fill="deepskyblue", outline="blue", width=3)
+        self.canal_rect = self.canvas.create_rectangle(250, 200, 800, 300, fill="deepskyblue", outline="blue", width=3)
         self.canvas.create_text(500, 170, text="CANAL", font=("Arial", 14, "bold"), fill="navy")
         
         # Agujas en los extremos del canal (ocultas hasta activarse)
         self.aguja_izq_line = self.canvas.create_line(250, 200, 250, 300, fill="red", width=8, state="hidden")
-        self.aguja_der_line = self.canvas.create_line(750, 200, 750, 300, fill="red", width=8, state="hidden")
+        self.aguja_der_line = self.canvas.create_line(800, 200, 800, 300, fill="red", width=8, state="hidden")
 
         # Letrero de sentido
         self.letrero_indicador = self.canvas.create_oval(480, 80, 520, 120, fill="red", outline="black", width=2)

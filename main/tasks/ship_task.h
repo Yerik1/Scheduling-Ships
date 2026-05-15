@@ -29,6 +29,9 @@ typedef struct ShipTask
     bool hasCheckpoint;
     bool hasEnteredBefore;
     bool justEntered;
+    int schedulerRunTimeMs;
+    bool preemptedByScheduler;
+    int rrStepsUsed;
 } ShipTask;
 
 BaseType_t createShipTask(struct Ship ship);
