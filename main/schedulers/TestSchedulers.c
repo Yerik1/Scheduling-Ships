@@ -54,8 +54,8 @@ static struct Ship make_ship(int id, ShipType type, int burst, int remaining,
     s.destination = RIGHT;
     s.state = READY;
     s.priority = priority;
-    s.burst_time = burst;
-    s.remaining_time = remaining;
+    s.burstTime = burst;
+    s.remainingTime = remaining;
     s.deadline = deadline;
     s.speed = 1;
     s.position = 0;
@@ -297,14 +297,14 @@ void test_rr(void)
     TEST("RR tick 1: ship 0 active");
     int idx = scheduler_rr(&q, quantum, &rr_index);
     CHECK(idx == 0, "RR tick 1: ship 0 active", "must execute index 0");
-    ship_decrement_remaining_time(&q.ships[idx]);
+    decRemainingTime(&q.ships[idx]);
 
     // Tick 2: s1 (remaining 3→2), quantum expired → rotate to index 1
     TEST("RR tick 2: quantum expired, rotate");
     idx = scheduler_rr(&q, quantum, &rr_index);
     CHECK(idx == 0, "RR tick 2: quantum expired, rotate",
           "still executes index 0 before rotating");
-    ship_decrement_remaining_time(&q.ships[idx]);
+    decRemainingTime(&q.ships[idx]);
     CHECK(rr_index == 1, "RR rotate to index 1 after quantum",
           "rr_index must advance to 1 after the quantum");
 
@@ -312,14 +312,14 @@ void test_rr(void)
     TEST("RR tick 3: ship 1 active");
     idx = scheduler_rr(&q, quantum, &rr_index);
     CHECK(idx == 1, "RR tick 3: ship 1 active", "must execute index 1");
-    ship_decrement_remaining_time(&q.ships[idx]);
+    decRemainingTime(&q.ships[idx]);
 
     // Tick 4: s2 (remaining 3→2), quantum expired → rotate to index 2
     TEST("RR tick 4: quantum expired, rotate");
     idx = scheduler_rr(&q, quantum, &rr_index);
     CHECK(idx == 1, "RR tick 4: quantum expired, rotate",
           "still executes index 1 before rotating");
-    ship_decrement_remaining_time(&q.ships[idx]);
+    decRemainingTime(&q.ships[idx]);
     CHECK(rr_index == 2, "RR rotate to index 2 after quantum",
           "rr_index must advance to 2 after the quantum");
 
@@ -327,14 +327,14 @@ void test_rr(void)
     TEST("RR tick 5: ship 2 active");
     idx = scheduler_rr(&q, quantum, &rr_index);
     CHECK(idx == 2, "RR tick 5: ship 2 active", "must execute index 2");
-    ship_decrement_remaining_time(&q.ships[idx]);
+    decRemainingTime(&q.ships[idx]);
 
     // Tick 6: s3 (remaining 3→2), quantum expired → rotate to index 0
     TEST("RR tick 6: quantum expired, rotate");
     idx = scheduler_rr(&q, quantum, &rr_index);
     CHECK(idx == 2, "RR tick 6: quantum expired, rotate",
           "still executes index 2 before rotating");
-    ship_decrement_remaining_time(&q.ships[idx]);
+    decRemainingTime(&q.ships[idx]);
     CHECK(rr_index == 0, "RR rotate to index 0 after quantum",
           "rr_index must advance to 0 after the quantum");
 
@@ -342,7 +342,7 @@ void test_rr(void)
     TEST("RR tick 7: ship 0 active again");
     idx = scheduler_rr(&q, quantum, &rr_index);
     CHECK(idx == 0, "RR tick 7: ship 0 active again", "must execute index 0 again");
-    ship_decrement_remaining_time(&q.ships[idx]);
+    decRemainingTime(&q.ships[idx]);
 
     TEST("RR no starvation — all ships receive CPU time");
     // Verify that after several ticks, all ships have received CPU time
@@ -433,9 +433,9 @@ void test_integration_simulation(void)
 
     // Canal of length 6: burst = ceil(6/speed)
     int canal = 6;
-    queue_add(&q, ship_factory_create(NORMAL, LEFT, canal));
-    queue_add(&q, ship_factory_create(FISHING, RIGHT, canal));
-    queue_add(&q, ship_factory_create(PATROL, LEFT, canal));
+    queue_add(&q, createShip(NORMAL, LEFT, canal));
+    queue_add(&q, createShip(FISHING, RIGHT, canal));
+    queue_add(&q, createShip(PATROL, LEFT, canal));
 
     printf("  Ships initially: %d\n", q.count);
 
@@ -451,12 +451,12 @@ void test_integration_simulation(void)
         struct Ship *ship = &q.ships[idx];
 
         // Channel decrements remaining time and marks finished if it reaches 0
-        ship_decrement_remaining_time(ship);
-        if (ship->remaining_time == 0)
-            ship_finish(ship);
+        decRemainingTime(ship);
+        if (ship->remainingTime == 0)
+            finish(ship);
 
         printf("  Tick %2d → Ship id=%d type=%d remaining=%d\n",
-               ticks, ship->id, ship->type, ship->remaining_time);
+               ticks, ship->id, ship->type, ship->remainingTime);
 
         if (ship->state == FINISHED)
         {
