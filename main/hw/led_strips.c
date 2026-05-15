@@ -62,7 +62,7 @@ static bool create_temp_strip(int gpio, int ledCount, led_strip_handle_t *strip)
 static void flush_buffer_to_gpio(int gpio, LedColor *buffer, int ledCount);
 
 static void clear_buffer(LedColor *buffer, int ledCount);
-static void render_queue_to_buffer(ReadyQueue *queue, LedColor *buffer, int ledCount, bool reverse);
+static void render_queue_to_buffer(ReadyQueue *queue, LedColor *buffer, int ledCount, bool reverse, int hwVisibleQueueSlots);
 static void render_canal_to_buffer(Canal *canal, LedColor *buffer, int ledCount);
 
 static LedColor ship_color(ShipType type);
@@ -116,7 +116,7 @@ bool led_strips_init(void)
     return true;
 }
 
-void led_strips_render_left_queue(ReadyQueue *leftQueue)
+void led_strips_render_left_queue(ReadyQueue *leftQueue, int hwVisibleQueueSlots)
 {
     clear_buffer(leftQueueBuffer, LEFT_QUEUE_LED_COUNT);
 
@@ -124,7 +124,7 @@ void led_strips_render_left_queue(ReadyQueue *leftQueue)
      * Si físicamente la cola izquierda se ve invertida,
      * cambia false por true.
      */
-    render_queue_to_buffer(leftQueue, leftQueueBuffer, LEFT_QUEUE_LED_COUNT, false);
+    render_queue_to_buffer(leftQueue, leftQueueBuffer, LEFT_QUEUE_LED_COUNT, false, hwVisibleQueueSlots);
 
     flush_buffer_to_gpio(
         LEFT_QUEUE_LED_GPIO,
@@ -133,7 +133,7 @@ void led_strips_render_left_queue(ReadyQueue *leftQueue)
     );
 }
 
-void led_strips_render_right_queue(ReadyQueue *rightQueue)
+void led_strips_render_right_queue(ReadyQueue *rightQueue, int hwVisibleQueueSlots)
 {
     clear_buffer(rightQueueBuffer, RIGHT_QUEUE_LED_COUNT);
 
@@ -141,7 +141,7 @@ void led_strips_render_right_queue(ReadyQueue *rightQueue)
      * Si físicamente la cola derecha se ve invertida,
      * cambia false por true.
      */
-    render_queue_to_buffer(rightQueue, rightQueueBuffer, RIGHT_QUEUE_LED_COUNT, false);
+    render_queue_to_buffer(rightQueue, rightQueueBuffer, RIGHT_QUEUE_LED_COUNT, false, hwVisibleQueueSlots);
 
     flush_buffer_to_gpio(
         RIGHT_QUEUE_LED_GPIO,
@@ -289,13 +289,19 @@ static void render_queue_to_buffer(
     ReadyQueue *queue,
     LedColor *buffer,
     int ledCount,
-    bool reverse
+    bool reverse,
+    int hwVisibleQueueSlots
 ) {
     if (queue == NULL || buffer == NULL || ledCount <= 0) {
         return;
     }
 
     int limit = queue->count;
+
+    if (limit > hwVisibleQueueSlots)
+    {
+        limit = hwVisibleQueueSlots;
+    }
 
     if (limit > ledCount) {
         limit = ledCount;

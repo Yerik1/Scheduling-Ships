@@ -18,29 +18,41 @@ class ConfigView:
         frame_general.pack(pady=10, fill=tk.X)
         self.widgets.append(frame_general)
 
+        # --- CAMPOS EXISTENTES ---
         tk.Label(frame_general, text="Largo del Canal (unidades):", bg="lightblue", font=("Arial", 10, "bold")).grid(row=0, column=0, sticky=tk.W, pady=5)
         self.entry_largo = tk.Entry(frame_general, width=10)
         self.entry_largo.insert(0, "6")
         self.entry_largo.grid(row=0, column=1, pady=5)
         self.widgets.extend([frame_general.children['!label'], self.entry_largo])
 
-        tk.Label(frame_general, text=f"Tamaño Máximo de Cola (visible: 4, máximo interno: {MAX_QUEUE_SIZE}):", bg="lightblue", font=("Arial", 10, "bold")).grid(row=1, column=0, sticky=tk.W, pady=5)
+        tk.Label(frame_general, text=f"Tamaño Máximo interno de Cola: {MAX_QUEUE_SIZE}):", bg="lightblue", font=("Arial", 10, "bold")).grid(row=1, column=0, sticky=tk.W, pady=5)
         self.entry_queue_size = tk.Entry(frame_general, width=10)
         self.entry_queue_size.insert(0, "4")
         self.entry_queue_size.grid(row=1, column=1, pady=5)
         self.widgets.append(self.entry_queue_size)
 
-        tk.Label(frame_general, text="Algoritmo de Scheduling:", bg="lightblue", font=("Arial", 10, "bold")).grid(row=2, column=0, sticky=tk.W, pady=5)
-        self.combo_algo = ttk.Combobox(frame_general, values=["FCFS", "SJF", "Round Robin", "Priority"], width=15)
+        tk.Label(
+            frame_general,
+            text="Barcos visibles por cola (1-4):",
+            bg="lightblue",
+            font=("Arial", 10, "bold")
+        ).grid(row=2, column=0, sticky=tk.W, pady=5)
+
+        self.entry_visible_queue = tk.Entry(frame_general, width=10)
+        self.entry_visible_queue.insert(0, "4")
+        self.entry_visible_queue.grid(row=2, column=1, pady=5)
+
+        tk.Label(frame_general, text="Algoritmo de Scheduling:", bg="lightblue", font=("Arial", 10, "bold")).grid(row=3, column=0, sticky=tk.W, pady=5)
+        self.combo_algo = ttk.Combobox(frame_general, values=["FCFS", "SJF", "Round Robin", "Priority", "STRN", "EDF"], width=15)
         self.combo_algo.current(0)
-        self.combo_algo.grid(row=2, column=1, pady=5)
+        self.combo_algo.grid(row=3, column=1, pady=5)
         self.combo_algo.bind('<<ComboboxSelected>>', self._update_fields)
         self.widgets.append(self.combo_algo)
 
-        tk.Label(frame_general, text="Control de Flujo:", bg="lightblue", font=("Arial", 10, "bold")).grid(row=3, column=0, sticky=tk.W, pady=5)
+        tk.Label(frame_general, text="Control de Flujo:", bg="lightblue", font=("Arial", 10, "bold")).grid(row=4, column=0, sticky=tk.W, pady=5)
         self.combo_flujo = ttk.Combobox(frame_general, values=["Equidad", "Letrero", "Tico"], width=15)
         self.combo_flujo.current(1)
-        self.combo_flujo.grid(row=3, column=1, pady=5)
+        self.combo_flujo.grid(row=4, column=1, pady=5)
         self.combo_flujo.bind('<<ComboboxSelected>>', self._update_fields)
         self.widgets.append(self.combo_flujo)
 
@@ -49,7 +61,7 @@ class ConfigView:
             text="Modo de Generación:",
             bg="lightblue",
             font=("Arial", 10, "bold")
-        ).grid(row=4, column=0, sticky=tk.W, pady=5)
+        ).grid(row=5, column=0, sticky=tk.W, pady=5)
 
         self.combo_modo = ttk.Combobox(
             frame_general,
@@ -58,26 +70,32 @@ class ConfigView:
             state="readonly"
         )
         self.combo_modo.current(0)
-        self.combo_modo.grid(row=4, column=1, pady=5)
+        self.combo_modo.grid(row=5, column=1, pady=5)
         self.widgets.append(self.combo_modo)
 
+        # --- CAMPOS DINÁMICOS ---
+        
+        # Fairness W (Equidad)
         tk.Label(frame_general, text="Fairness W:", bg="lightblue", font=("Arial", 10, "bold")).grid(row=5, column=0, sticky=tk.W, pady=5)
         self.entry_fairness_w = tk.Entry(frame_general, width=10)
         self.entry_fairness_w.insert(0, "1")
-        self.entry_fairness_w.grid(row=5, column=1, pady=5)
+        self.entry_fairness_w.grid(row=6, column=1, pady=5)
         self.widgets.append(self.entry_fairness_w)
 
+        # Sign Interval (Letrero)
         tk.Label(frame_general, text="Sign Interval (ms):", bg="lightblue", font=("Arial", 10, "bold")).grid(row=6, column=0, sticky=tk.W, pady=5)
         self.entry_sign_interval = tk.Entry(frame_general, width=10)
         self.entry_sign_interval.insert(0, "1000")
-        self.entry_sign_interval.grid(row=6, column=1, pady=5)
+        self.entry_sign_interval.grid(row=7, column=1, pady=5)
         self.widgets.append(self.entry_sign_interval)
 
+        # RR Quantum (Round Robin)
         tk.Label(frame_general, text="RR Quantum:", bg="lightblue", font=("Arial", 10, "bold")).grid(row=7, column=0, sticky=tk.W, pady=5)
         self.entry_rr_quantum = tk.Entry(frame_general, width=10)
         self.entry_rr_quantum.insert(0, "10")
         self.entry_rr_quantum.grid(row=7, column=1, pady=5)
         self.widgets.append(self.entry_rr_quantum)
+
 
         # Frame para barcos iniciales
         frame_barcos = tk.Frame(parent, bg="lightgreen", padx=20, pady=10)
@@ -152,22 +170,25 @@ class ConfigView:
         scheduler = self.combo_algo.get()
         flow = self.combo_flujo.get()
         
-        # Por defecto, habilitar todos
-        self.entry_fairness_w.config(state='normal')
-        self.entry_sign_interval.config(state='normal')
-        self.entry_rr_quantum.config(state='normal')
+        # Reset de estados (Habilitar todo primero)
+        fields = [self.entry_fairness_w, self.entry_sign_interval, self.entry_rr_quantum, ]
+        
+        for f in fields:
+            f.config(state='normal', bg="white")
 
-        # Si scheduler no es Round Robin, deshabilitar Quantum
+        # Lógica de deshabilitación visual
         if scheduler != "Round Robin":
-            self.entry_rr_quantum.config(state='disabled')
+            self._disable_entry(self.entry_rr_quantum)
         
-        # Si flow es Letrero, W
-        if flow == "Letrero":
-            self.entry_fairness_w.config(state='disabled')
+        if flow != "Letrero":
+            self._disable_entry(self.entry_sign_interval)
         
-        # Si flow es Equidad, Sign Interval
-        if flow == "Equidad":
-            self.entry_sign_interval.config(state='disabled')
+        if flow != "Equidad":
+            self._disable_entry(self.entry_fairness_w)
+    
+    def _disable_entry(self, entry):
+        """Helper para deshabilitar y cambiar color visualmente"""
+        entry.config(state='disabled', disabledbackground="#e0e0e0")
 
     def enviar_datos(self):
         scheduler = self.combo_algo.get()
@@ -176,10 +197,26 @@ class ConfigView:
         # Validaciones
         try:
             queue_size = int(self.entry_queue_size.get())
+            visible_queue = int(self.entry_visible_queue.get())
             if queue_size <= 0 or queue_size >  MAX_QUEUE_SIZE:
                 messagebox.showerror(
                     "Error de Validación",
                     f"El tamaño de la cola debe ser entre 1 y {MAX_QUEUE_SIZE}."
+                )
+                return
+
+
+            if visible_queue <= 0 or visible_queue > 4:
+                messagebox.showerror(
+                    "Error de Validación",
+                    "La cantidad de barcos visibles por cola debe estar entre 1 y 4."
+                )
+                return
+
+            if visible_queue > queue_size:
+                messagebox.showerror(
+                    "Error de Validación",
+                    "La cantidad visible no puede ser mayor que el tamaño interno de cola."
                 )
                 return
 
@@ -236,7 +273,8 @@ class ConfigView:
             },
             "fairnessW": int(self.entry_fairness_w.get()) if flow == "Equidad" else 0,
             "signInterval": int(self.entry_sign_interval.get()) if flow == "Letrero" else 0,
-            "rrQuantum": int(self.entry_rr_quantum.get()) if scheduler == "Round Robin" else 0
+            "rrQuantum": int(self.entry_rr_quantum.get()) if scheduler == "Round Robin" else 0,
+            "visibleQueueSlots": visible_queue,
         }
         self.callback_iniciar(config)
 

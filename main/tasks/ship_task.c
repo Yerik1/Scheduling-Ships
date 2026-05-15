@@ -9,73 +9,82 @@
 
 static void shipTaskEntry(void *params);
 
-static const char *shipTypeToString(ShipType type) {
-    switch (type) {
-        case NORMAL:
-            return "NORMAL";
-        case FISHING:
-            return "FISHING";
-        case PATROL:
-            return "PATROL";
-        default:
-            return "UNKNOWN";
+static const char *shipTypeToString(ShipType type)
+{
+    switch (type)
+    {
+    case NORMAL:
+        return "NORMAL";
+    case FISHING:
+        return "FISHING";
+    case PATROL:
+        return "PATROL";
+    default:
+        return "UNKNOWN";
     }
 }
 
-static const char *directionToString(Direction direction) {
-    switch (direction) {
-        case LEFT:
-            return "LEFT";
-        case RIGHT:
-            return "RIGHT";
-        default:
-            return "UNKNOWN";
+static const char *directionToString(Direction direction)
+{
+    switch (direction)
+    {
+    case LEFT:
+        return "LEFT";
+    case RIGHT:
+        return "RIGHT";
+    default:
+        return "UNKNOWN";
     }
 }
 
-static const char *shipStateToString(ShipState state) {
-    switch (state) {
-        case READY:
-            return "READY";
-        case WAITING:
-            return "WAITING";
-        case RUNNING:
-            return "RUNNING";
-        case BLOCKED:
-            return "BLOCKED";
-        case FINISHED:
-            return "FINISHED";
-        default:
-            return "UNKNOWN";
+static const char *shipStateToString(ShipState state)
+{
+    switch (state)
+    {
+    case READY:
+        return "READY";
+    case WAITING:
+        return "WAITING";
+    case RUNNING:
+        return "RUNNING";
+    case BLOCKED:
+        return "BLOCKED";
+    case FINISHED:
+        return "FINISHED";
+    default:
+        return "UNKNOWN";
     }
 }
 
-BaseType_t createShipTask(struct Ship ship) {
+BaseType_t createShipTask(struct Ship ship)
+{
     return createShipTaskWithConfig(
         ship,
         SHIP_TASK_DEFAULT_RTOS_PRIORITY,
         SHIP_TASK_DEFAULT_STACK_SIZE,
-        SHIP_TASK_DEFAULT_STEPS
-    );
+        SHIP_TASK_DEFAULT_STEPS);
 }
 
 BaseType_t createShipTaskWithConfig(
     struct Ship ship,
     UBaseType_t rtosPriority,
     uint32_t stackSizeBytes,
-    int maxSteps
-) {
-    if (stackSizeBytes == 0) {
+    int maxSteps)
+{
+    if (stackSizeBytes == 0)
+    {
         stackSizeBytes = SHIP_TASK_DEFAULT_STACK_SIZE;
     }
 
-    if (maxSteps <= 0) {
+    if (maxSteps <= 0)
+    {
         maxSteps = SHIP_TASK_DEFAULT_STEPS;
     }
 
     ShipTask *shipTask = pvPortMalloc(sizeof(ShipTask));
 
-    if (shipTask == NULL) {
+    if (shipTask == NULL)
+    {
         printf("ERROR: No se pudo reservar memoria para ShipTask\n");
         return pdFAIL;
     }
@@ -83,13 +92,14 @@ BaseType_t createShipTaskWithConfig(
     shipTask->ship = ship;
     shipTask->handle = NULL;
     shipTask->maxSteps = maxSteps;
+    shipTask->hasEnteredBefore = false;
+    shipTask->justEntered = false;
 
     snprintf(
         shipTask->taskName,
         sizeof(shipTask->taskName),
         "Ship_%d",
-        ship.id
-    );
+        ship.id);
 
     BaseType_t result = xTaskCreate(
         shipTaskEntry,
@@ -97,10 +107,10 @@ BaseType_t createShipTaskWithConfig(
         stackSizeBytes,
         shipTask,
         rtosPriority,
-        &shipTask->handle
-    );
+        &shipTask->handle);
 
-    if (result != pdPASS) {
+    if (result != pdPASS)
+    {
         printf("ERROR: No se pudo crear la task del barco %d\n", ship.id);
         vPortFree(shipTask);
         return pdFAIL;
@@ -111,10 +121,12 @@ BaseType_t createShipTaskWithConfig(
     return pdPASS;
 }
 
-static void shipTaskEntry(void *params) {
-    ShipTask *shipTask = (ShipTask *) params;
+static void shipTaskEntry(void *params)
+{
+    ShipTask *shipTask = (ShipTask *)params;
 
-    if (shipTask == NULL) {
+    if (shipTask == NULL)
+    {
         vTaskDelete(NULL);
         return;
     }
@@ -128,8 +140,7 @@ static void shipTaskEntry(void *params) {
         shipTypeToString(ship->type),
         directionToString(ship->origin),
         directionToString(ship->destination),
-        shipStateToString(ship->state)
-    );
+        shipStateToString(ship->state));
 
     setState(ship, RUNNING);
 
@@ -137,16 +148,17 @@ static void shipTaskEntry(void *params) {
         "[%s] Barco %d cambio a estado %s\n",
         shipTask->taskName,
         ship->id,
-        shipStateToString(ship->state)
-    );
+        shipStateToString(ship->state));
 
     int stepsToRun = ship->remainingTime;
 
-    if (stepsToRun <= 0) {
+    if (stepsToRun <= 0)
+    {
         stepsToRun = shipTask->maxSteps;
     }
 
-    for (int i = 0; i < stepsToRun; i++) {
+    for (int i = 0; i < stepsToRun; i++)
+    {
         updtPosition(ship);
         decRemainingTime(ship);
 
@@ -156,8 +168,7 @@ static void shipTaskEntry(void *params) {
             ship->id,
             ship->position,
             ship->remainingTime,
-            getSpeed(ship)
-        );
+            getSpeed(ship));
 
         vTaskDelay(pdMS_TO_TICKS(1000));
     }
@@ -168,8 +179,7 @@ static void shipTaskEntry(void *params) {
         "[%s] Barco %d finalizo | Estado: %s\n",
         shipTask->taskName,
         ship->id,
-        shipStateToString(ship->state)
-    );
+        shipStateToString(ship->state));
 
     vPortFree(shipTask);
     vTaskDelete(NULL);

@@ -12,7 +12,8 @@
 
 #include "../queues/canal_list.h"
 
-typedef struct {
+typedef struct
+{
     int length;
     Direction current_direction;
     CanalList ships_inside;
@@ -22,7 +23,7 @@ typedef struct {
 
     SemaphoreHandle_t stateSemaphore;
     SemaphoreHandle_t positionSemaphores[CANAL_LEN];
-}Canal;
+} Canal;
 
 void canal_init(Canal *canal, int length, Direction initial_direction);
 bool canal_is_empty(Canal *canal);
@@ -36,5 +37,7 @@ void canal_unblock(Canal *canal);
 bool canal_move_one_step(Canal *canal, ShipTask *task);
 void canal_notify_ships(Canal *canal);
 void canal_notify_ships_ordered(Canal *canal);
+void canal_set_ship_position(Canal *canal, ShipTask *task, int position);
+bool canal_enter_at(Canal *canal, ShipTask *task, int position);
 
-#endif //CANAL_H
+#endif // CANAL_H

@@ -36,15 +36,16 @@ class CanalView:
 
     def actualizar_barcos(self, cola_izq, cola_der, barcos_canal):
         self.canvas.delete("barco_tag")
+        visible = getattr(self.modelo, "visible_queue_slots", 4)
 
         # --- 1. DIBUJAR COLA IZQUIERDA ---
-        for i, b_id in enumerate(cola_izq[:VISIBLE_QUEUE_SLOTS]):
+        for i, b_id in enumerate(cola_izq[:visible]):
             x_cola = 200 - (i * 50)
             tipo = self.get_tipo_from_id(b_id)
             self.dibujar_barco(x_cola, 230, tipo, b_id)
 
         # --- 2. DIBUJAR COLA DERECHA ---
-        for i, b_id in enumerate(cola_der[:VISIBLE_QUEUE_SLOTS]):
+        for i, b_id in enumerate(cola_der[:visible]):
             x_cola = 800 + (i * 50)
             tipo = self.get_tipo_from_id(b_id)
             self.dibujar_barco(x_cola, 230, tipo, b_id)

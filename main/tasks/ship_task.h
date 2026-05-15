@@ -16,13 +16,19 @@
 #define SHIP_TASK_DEFAULT_RTOS_PRIORITY 5
 #define SHIP_TASK_DEFAULT_STEPS 5
 
-typedef struct ShipTask {
+typedef struct ShipTask
+{
     struct Ship ship;
     TaskHandle_t handle;
     char taskName[16];
     int maxSteps;
     float effectiveSpeed;
     float moveCredit;
+    int savedPosition;
+    float savedMoveCredit;
+    bool hasCheckpoint;
+    bool hasEnteredBefore;
+    bool justEntered;
 } ShipTask;
 
 BaseType_t createShipTask(struct Ship ship);
@@ -31,7 +37,6 @@ BaseType_t createShipTaskWithConfig(
     struct Ship ship,
     UBaseType_t rtosPriority,
     uint32_t stackSizeBytes,
-    int maxSteps
-);
+    int maxSteps);
 
-#endif //SHIP_TASK_H
+#endif // SHIP_TASK_H

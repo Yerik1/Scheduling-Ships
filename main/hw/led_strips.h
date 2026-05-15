@@ -12,8 +12,8 @@
 
 bool led_strips_init(void);
 
-void led_strips_render_left_queue(ReadyQueue *leftQueue);
-void led_strips_render_right_queue(ReadyQueue *rightQueue);
+void led_strips_render_left_queue(ReadyQueue *leftQueue, int hwVisibleQueueSlots);
+void led_strips_render_right_queue(ReadyQueue *rightQueue, int hwVisibleQueueSlots);
 void led_strips_render_canal(Canal *canal);
 bool led_strips_init_canal_only(void);
 
