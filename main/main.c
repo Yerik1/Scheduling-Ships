@@ -94,7 +94,6 @@ static void reorder_queues_by_scheduler_unlocked(void);
 static bool restore_interrupted_ships_to_canal(void);
 static void clear_interrupted_ships_buffer(void);
 
-
 void app_main(void)
 {
     printf("\n\n===============================\n");
@@ -429,7 +428,7 @@ static float get_effective_ship_speed(ShipTask *shipTask)
         return 0.0f;
     }
 
-    return (float)getSpeed(&shipTask->ship) * get_length_speed_factor();
+    return (float)ship_get_speed(&shipTask->ship) * get_length_speed_factor();
 }
 
 static bool create_ship_from_ui(char sideChar, char typeChar)
@@ -447,7 +446,7 @@ static bool create_ship_from_ui(char sideChar, char typeChar)
 
     memset(shipTask, 0, sizeof(ShipTask));
 
-    shipTask->ship = createShip(type, direction, PHYSICAL_CANAL_CELLS);
+    shipTask->ship = ship_factory_create(type, direction, PHYSICAL_CANAL_CELLS);
     shipTask->handle = NULL;
     shipTask->maxSteps = PHYSICAL_CANAL_CELLS + 5;
 
@@ -521,7 +520,7 @@ static bool create_ship_from_ui(char sideChar, char typeChar)
         shipTask->ship.id,
         sideChar,
         typeChar,
-        getSpeed(&shipTask->ship),
+        ship_get_speed(&shipTask->ship),
         shipTask->effectiveSpeed);
 
     return true;
@@ -545,7 +544,6 @@ static void handle_proximity_interrupt(void)
     proximitySafetyActive = true;
     proximityReleaseCounter = 0;
     canal_block(&demoCanal);
-
 
     interruptedShipCount = 0;
 
@@ -595,8 +593,7 @@ static void handle_proximity_interrupt(void)
                     "Barco %d retirado por interrupcion | savedPosition=%d | savedCredit=%.2f\n",
                     removedTask->ship.id,
                     removedTask->savedPosition,
-                    removedTask->savedMoveCredit
-                );
+                    removedTask->savedMoveCredit);
             }
             else
             {
@@ -665,16 +662,14 @@ static bool restore_interrupted_ships_to_canal(void)
         bool entered = canal_enter_at(
             &demoCanal,
             task,
-            task->savedPosition
-        );
+            task->savedPosition);
 
         if (!entered)
         {
             printf(
                 "ERROR: barco %d no pudo restaurarse en posicion %d\n",
                 task->ship.id,
-                task->savedPosition
-            );
+                task->savedPosition);
 
             return false;
         }
@@ -689,8 +684,7 @@ static bool restore_interrupted_ships_to_canal(void)
         printf(
             "Barco %d restaurado en posicion %d\n",
             task->ship.id,
-            task->ship.position
-        );
+            task->ship.position);
     }
 
     clear_interrupted_ships_buffer();
@@ -755,8 +749,7 @@ static void simulation_task(void *params)
                 printf(
                     "Sensor sin deteccion | contador liberacion: %d/%d\n",
                     proximityReleaseCounter,
-                    SENSOR_RELEASE_CONFIRM_SUBTICKS
-                );
+                    SENSOR_RELEASE_CONFIRM_SUBTICKS);
             }
 
             /*
@@ -948,16 +941,14 @@ static void ship_task_entry(void *params)
         {
             printf(
                 "[%s] WARN: desperto con checkpoint activo. No se limpia aqui.\n",
-                shipTask->taskName
-            );
+                shipTask->taskName);
         }
         else
         {
             printf(
                 "[%s] Entro al canal | Posicion: %d\n",
                 shipTask->taskName,
-                shipTask->ship.position
-            );
+                shipTask->ship.position);
         }
 
         bool firstMovementAfterEntry = !shipTask->hasEnteredBefore;
@@ -1007,8 +998,7 @@ static void ship_task_entry(void *params)
                 printf(
                     "[%s] Primer subtick tras entrada | Posicion: %d\n",
                     shipTask->taskName,
-                    shipTask->ship.position
-                );
+                    shipTask->ship.position);
             }
 
             /*
@@ -1031,27 +1021,30 @@ static void ship_task_entry(void *params)
             if (
                 shipTask->moveCredit >= 1.0f &&
                 shipTask->ship.state != FINISHED &&
-                systemRunning
-            ) {
+                systemRunning)
+            {
                 bool moved = canal_move_one_step(&demoCanal, shipTask);
 
-                if (moved) {
+                if (moved)
+                {
                     movedAtLeastOnce = true;
                     shipTask->moveCredit -= 1.0f;
-                } else {
+                }
+                else
+                {
                     blocked = true;
                     shipTask->moveCredit = 0.0f;
                 }
             }
 
-            if (!movedAtLeastOnce && !blocked && shipTask->moveCredit < 1.0f) {
+            if (!movedAtLeastOnce && !blocked && shipTask->moveCredit < 1.0f)
+            {
                 printf(
                     "[%s] Acumulando credito | Credito: %.2f | Incremento: %.2f | Velocidad efectiva: %.2f\n",
                     shipTask->taskName,
                     shipTask->moveCredit,
                     creditIncrement,
-                    shipTask->effectiveSpeed
-                );
+                    shipTask->effectiveSpeed);
             }
         }
 
@@ -1371,11 +1364,13 @@ static void notify_ships_and_render(void)
 
 static bool try_release_one_ship_to_canal(int *rrIndexLeft, int *rrIndexRight)
 {
-    if (is_proximity_safety_active()) {
+    if (is_proximity_safety_active())
+    {
         return false;
     }
 
-    if (!take_queues()) {
+    if (!take_queues())
+    {
         return false;
     }
 
@@ -1384,57 +1379,68 @@ static bool try_release_one_ship_to_canal(int *rrIndexLeft, int *rrIndexRight)
     FLOWDECISION decision = flow_policy_select_side(
         &flowPolicy,
         &leftQueue,
-        &rightQueue
-    );
+        &rightQueue);
 
     ReadyQueue *selectedQueue = NULL;
     FLOWDECISION releasedSide = FLOW_NONE;
 
-    if (decision == FLOW_LEFT) {
+    if (decision == FLOW_LEFT)
+    {
         selectedQueue = &leftQueue;
         releasedSide = FLOW_LEFT;
-    } else if (decision == FLOW_RIGHT) {
+    }
+    else if (decision == FLOW_RIGHT)
+    {
         selectedQueue = &rightQueue;
         releasedSide = FLOW_RIGHT;
     }
 
-    if (selectedQueue == NULL || queue_is_empty(selectedQueue)) {
+    if (selectedQueue == NULL || queue_is_empty(selectedQueue))
+    {
         give_queues();
         return false;
     }
 
     int selectedIndex = -1;
 
-    if (config.schedulerType == SCHD_RR) {
-        if (releasedSide == FLOW_LEFT) {
+    if (config.schedulerType == SCHD_RR)
+    {
+        if (releasedSide == FLOW_LEFT)
+        {
             selectedIndex = scheduler_rr(selectedQueue, config.rrQuantum, rrIndexLeft);
-        } else {
+        }
+        else
+        {
             selectedIndex = scheduler_rr(selectedQueue, config.rrQuantum, rrIndexRight);
         }
-    } else {
+    }
+    else
+    {
         selectedIndex = select_scheduler_index(config.schedulerType, selectedQueue);
     }
 
-    if (selectedIndex < 0) {
+    if (selectedIndex < 0)
+    {
         give_queues();
         return false;
     }
 
     ShipTask *selectedTask = queue_get(selectedQueue, selectedIndex);
 
-    if (selectedTask == NULL) {
+    if (selectedTask == NULL)
+    {
         give_queues();
         return false;
     }
 
     bool entered = canal_enter(&demoCanal, selectedTask);
 
-    if (entered) {
+    if (entered)
+    {
         printf(
             "Barco %d entro exitosamente desde %s\n",
             selectedTask->ship.id,
-            flow_decision_to_string(releasedSide)
-        );
+            flow_decision_to_string(releasedSide));
 
         selectedTask->justEntered = true;
 
@@ -1451,7 +1457,8 @@ static bool fixed_simulation_finished(void)
 {
     bool finished = false;
 
-    if (!take_queues()) {
+    if (!take_queues())
+    {
         return false;
     }
 
@@ -1468,7 +1475,8 @@ static bool fixed_simulation_finished(void)
 
 static void reorder_queue_by_scheduler_unlocked(ReadyQueue *queue)
 {
-    if (queue == NULL) {
+    if (queue == NULL)
+    {
         return;
     }
 
@@ -1476,11 +1484,13 @@ static void reorder_queue_by_scheduler_unlocked(ReadyQueue *queue)
      * FCFS ya representa orden de llegada.
      * RR no se debe reordenar porque depende de su índice rotativo.
      */
-    if (config.schedulerType == SCHED_FCFS || config.schedulerType == SCHD_RR) {
+    if (config.schedulerType == SCHED_FCFS || config.schedulerType == SCHD_RR)
+    {
         return;
     }
 
-    if (queue->count <= 1) {
+    if (queue->count <= 1)
+    {
         return;
     }
 
@@ -1490,22 +1500,26 @@ static void reorder_queue_by_scheduler_unlocked(ReadyQueue *queue)
     queue_init(&workQueue);
     queue_init(&sortedQueue);
 
-    for (int i = 0; i < queue->count; i++) {
+    for (int i = 0; i < queue->count; i++)
+    {
         workQueue.tasks[i] = queue->tasks[i];
     }
 
     workQueue.count = queue->count;
 
-    while (!queue_is_empty(&workQueue)) {
+    while (!queue_is_empty(&workQueue))
+    {
         int selectedIndex = select_scheduler_index(config.schedulerType, &workQueue);
 
-        if (selectedIndex < 0) {
+        if (selectedIndex < 0)
+        {
             break;
         }
 
         ShipTask *selectedTask = queue_get(&workQueue, selectedIndex);
 
-        if (selectedTask == NULL) {
+        if (selectedTask == NULL)
+        {
             break;
         }
 
@@ -1515,7 +1529,8 @@ static void reorder_queue_by_scheduler_unlocked(ReadyQueue *queue)
 
     queue->count = sortedQueue.count;
 
-    for (int i = 0; i < sortedQueue.count; i++) {
+    for (int i = 0; i < sortedQueue.count; i++)
+    {
         queue->tasks[i] = sortedQueue.tasks[i];
     }
 }
@@ -1525,4 +1540,3 @@ static void reorder_queues_by_scheduler_unlocked(void)
     reorder_queue_by_scheduler_unlocked(&leftQueue);
     reorder_queue_by_scheduler_unlocked(&rightQueue);
 }
-

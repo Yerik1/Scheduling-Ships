@@ -205,7 +205,7 @@ bool canal_enter(Canal *canal, ShipTask *task)
         if (result)
         {
             task->ship.position = entryIndex;
-            setState(&task->ship, RUNNING);
+            ship_set_state(&task->ship, RUNNING);
 
             printf(
                 "Barco %d entro al canal en posicion %d\n",
@@ -306,8 +306,8 @@ bool canal_move_task(Canal *canal, ShipTask *task)
 
         if (removedTask != NULL)
         {
-            decRemainingTime(&removedTask->ship);
-            finish(&removedTask->ship);
+            ship_decrement_remaining_time(&removedTask->ship);
+            ship_finish(&removedTask->ship);
 
             printf(
                 "Barco %d salio del canal desde posicion %d\n",
@@ -324,7 +324,7 @@ bool canal_move_task(Canal *canal, ShipTask *task)
         if (result)
         {
             task->ship.position = nextIndex;
-            decRemainingTime(&task->ship);
+            ship_decrement_remaining_time(&task->ship);
 
             printf(
                 "Barco %d se movio de %d a %d\n",
@@ -369,8 +369,8 @@ ShipTask *canal_remove_task(Canal *canal, ShipTask *task)
 
     if (removedTask != NULL)
     {
-        rstPosition(&removedTask->ship);
-        setState(&removedTask->ship, READY);
+        ship_reset_position(&removedTask->ship);
+        ship_set_state(&removedTask->ship, READY);
 
         printf(
             "Barco %d fue removido del canal y vuelve a READY\n",
@@ -801,7 +801,7 @@ bool canal_move_one_step(Canal *canal, ShipTask *task)
 
         if (removedTask != NULL)
         {
-            finish(&removedTask->ship);
+            ship_finish(&removedTask->ship);
 
             printf(
                 "Barco %d salio del canal desde posicion %d\n",
@@ -844,7 +844,7 @@ bool canal_move_one_step(Canal *canal, ShipTask *task)
         if (result)
         {
             task->ship.position = nextIndex;
-            decRemainingTime(&task->ship);
+            ship_decrement_remaining_time(&task->ship);
 
             printf(
                 "Barco %d avanzo de %d a %d\n",
@@ -991,24 +991,29 @@ void canal_set_ship_position(Canal *canal, ShipTask *task, int position)
 
 bool canal_enter_at(Canal *canal, ShipTask *task, int targetIndex)
 {
-    if (canal == NULL || task == NULL) {
+    if (canal == NULL || task == NULL)
+    {
         return false;
     }
 
-    if (targetIndex < 0 || targetIndex >= canal->length) {
+    if (targetIndex < 0 || targetIndex >= canal->length)
+    {
         return false;
     }
 
-    if (!take_state_semaphore(canal)) {
+    if (!take_state_semaphore(canal))
+    {
         return false;
     }
 
-    if (canal->isBlocked) {
+    if (canal->isBlocked)
+    {
         give_state_semaphore(canal);
         return false;
     }
 
-    if (!take_position_semaphore(canal, targetIndex)) {
+    if (!take_position_semaphore(canal, targetIndex))
+    {
         give_state_semaphore(canal);
         return false;
     }
@@ -1017,7 +1022,8 @@ bool canal_enter_at(Canal *canal, ShipTask *task, int targetIndex)
      * Reingreso estricto:
      * si la posición guardada está ocupada, NO busca otra.
      */
-    if (!is_pos_free(&canal->ships_inside, targetIndex)) {
+    if (!is_pos_free(&canal->ships_inside, targetIndex))
+    {
         give_position_semaphore(canal, targetIndex);
         give_state_semaphore(canal);
         return false;
@@ -1027,7 +1033,7 @@ bool canal_enter_at(Canal *canal, ShipTask *task, int targetIndex)
     canal->ships_inside.count++;
 
     task->ship.position = targetIndex;
-    setState(&task->ship, RUNNING);
+    ship_set_state(&task->ship, RUNNING);
 
     /*
      * Mantener dirección del canal según el origen del barco.

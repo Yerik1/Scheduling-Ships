@@ -142,7 +142,7 @@ static void shipTaskEntry(void *params)
         directionToString(ship->destination),
         shipStateToString(ship->state));
 
-    setState(ship, RUNNING);
+    ship_set_state(ship, RUNNING);
 
     printf(
         "[%s] Barco %d cambio a estado %s\n",
@@ -150,7 +150,7 @@ static void shipTaskEntry(void *params)
         ship->id,
         shipStateToString(ship->state));
 
-    int stepsToRun = ship->remainingTime;
+    int stepsToRun = ship->remaining_time;
 
     if (stepsToRun <= 0)
     {
@@ -159,21 +159,21 @@ static void shipTaskEntry(void *params)
 
     for (int i = 0; i < stepsToRun; i++)
     {
-        updtPosition(ship);
-        decRemainingTime(ship);
+        ship_update_position(ship);
+        ship_decrement_remaining_time(ship);
 
         printf(
             "[%s] Barco %d avanzando | Posicion: %d | Tiempo restante: %d | Velocidad: %d\n",
             shipTask->taskName,
             ship->id,
             ship->position,
-            ship->remainingTime,
-            getSpeed(ship));
+            ship->remaining_time,
+            ship_get_speed(ship));
 
         vTaskDelay(pdMS_TO_TICKS(1000));
     }
 
-    finish(ship);
+    ship_finish(ship);
 
     printf(
         "[%s] Barco %d finalizo | Estado: %s\n",
